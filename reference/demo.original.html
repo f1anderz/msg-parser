@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>msg-preview — прев'ю Outlook .msg у браузері</title>
+<style>
+  :root{
+    --ink:#1b2a4a; --muted:#5d6b85; --bg:#eef2f7; --card:#ffffff;
+    --accent:#2b4fd8; --stamp:#c43a3a; --line:#d6deea;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.55 -apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:40px 20px 80px}
+  header{margin-bottom:28px}
+  h1{font-size:26px; font-weight:700; letter-spacing:-.01em; margin:0 0 6px}
+  h1 code{font:600 24px/1 ui-monospace,"Cascadia Mono",Consolas,monospace; color:var(--accent)}
+  .sub{color:var(--muted); margin:0; max-width:56ch}
+
+  /* Зона завантаження — «авіаконверт»: смугаста рамка par avion + клапан */
+  .drop{
+    position:relative; margin:28px 0; padding:6px; border-radius:12px; background:var(--card);
+    border:6px solid transparent;
+    background-clip:padding-box;
+    cursor:pointer;
+  }
+  .drop::before{
+    content:""; position:absolute; inset:-6px; z-index:-1; border-radius:12px;
+    background:repeating-linear-gradient(45deg,
+      var(--stamp) 0 14px, #fff 14px 28px, var(--accent) 28px 42px, #fff 42px 56px);
+  }
+  .drop-inner{
+    position:relative; overflow:hidden; border-radius:6px; padding:46px 24px 42px; text-align:center;
+    background:
+      linear-gradient(155deg, transparent 49.6%, var(--line) 49.6%, var(--line) 50.4%, transparent 50.4%) no-repeat,
+      linear-gradient(205deg, transparent 49.6%, var(--line) 49.6%, var(--line) 50.4%, transparent 50.4%) no-repeat,
+      #fbfcfe;
+    background-size:50.5% 130px, 50.5% 130px, auto;
+    background-position:top left, top right, 0 0;
+    transition:background-color .15s;
+  }
+  .drop.over .drop-inner{background-color:#eff4ff}
+  .drop-title{font-size:17px; font-weight:650; margin:0 0 4px}
+  .drop-hint{color:var(--muted); font-size:13.5px; margin:0}
+  .drop kbd{
+    display:inline-block; margin-top:14px; padding:8px 18px; border-radius:8px;
+    background:var(--accent); color:#fff; font:600 14px/1 inherit; border:0;
+  }
+  .privacy{
+    display:flex; gap:8px; align-items:baseline; color:var(--muted); font-size:13px; margin-top:10px;
+  }
+  .privacy::before{content:"🔒"; font-size:12px}
+
+  #previews > *{margin-bottom:24px}
+  .file-tag{
+    font:12px/1 ui-monospace,Consolas,monospace; color:var(--muted); margin:0 0 8px;
+  }
+  .err{
+    background:#fdf1f1; border:1px solid #eccfcf; color:#8c2f2f;
+    border-radius:10px; padding:14px 18px; font-size:14px;
+  }
+  footer{margin-top:40px; color:var(--muted); font-size:13px}
+  footer code{font-family:ui-monospace,Consolas,monospace}
+  @media (prefers-reduced-motion: no-preference){
+    .drop-inner{transition:background-color .15s ease}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><code>msg-preview.js</code> — прев'ю листів Outlook</h1>
+    <p class="sub">Відкривайте файли <b>.msg</b> просто в браузері: тема, відправник, одержувачі,
+    тіло листа (HTML/текст/RTF), вкладення та вбудовані зображення.</p>
+  </header>
+
+  <div class="drop" id="drop" role="button" tabindex="0" aria-label="Обрати або перетягнути .msg файл">
+    <div class="drop-inner">
+      <p class="drop-title">Перетягніть сюди файл .msg</p>
+      <p class="drop-hint">або натисніть, щоб обрати з диска — можна кілька одразу</p>
+      <kbd>Обрати файли</kbd>
+    </div>
+  </div>
+  <p class="privacy">Усе відбувається локально у вашому браузері — файли нікуди не надсилаються.</p>
+  <input type="file" id="fileInput" accept=".msg" multiple hidden>
+
+  <div id="previews"></div>
+
+  <footer>
+    Використання у своєму коді: <code>MsgPreview.render(arrayBuffer, container)</code> —
+    деталі в README.
+  </footer>
+</div>
+
+<script src="msg-preview.js"></script>
+<script>
+(function(){
+  var drop = document.getElementById('drop');
+  var input = document.getElementById('fileInput');
+  var previews = document.getElementById('previews');
+
+  function handleFiles(files){
+    Array.prototype.forEach.call(files, function(file){
+      var block = document.createElement('div');
+      var tag = document.createElement('p');
+      tag.className = 'file-tag';
+      tag.textContent = file.name + ' · ' + (file.size/1024).toFixed(1) + ' КБ';
+      block.appendChild(tag);
+      previews.prepend(block);
+
+      file.arrayBuffer().then(function(buf){
+        try {
+          MsgPreview.render(buf, block);
+        } catch (e) {
+          var err = document.createElement('div');
+          err.className = 'err';
+          err.textContent = 'Не вдалося відкрити «' + file.name + '»: ' + e.message;
+          block.appendChild(err);
+        }
+      });
+    });
+  }
+
+  drop.addEventListener('click', function(){ input.click(); });
+  drop.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); input.click(); }});
+  input.addEventListener('change', function(){ handleFiles(input.files); input.value=''; });
+
+  ['dragenter','dragover'].forEach(function(ev){
+    drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function(e){ handleFiles(e.dataTransfer.files); });
+})();
+</script>
+</body>
+</html>
