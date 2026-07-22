@@ -75,7 +75,7 @@ export function deencapsulateHtml(rtfBytes: Uint8Array): string | null {
       if (c2 === '~') {
         if (emitting()) {
           flush();
-          out.push(' ');
+          out.push(' ');
         }
         i += 2;
         continue;

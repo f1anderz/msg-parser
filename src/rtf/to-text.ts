@@ -56,7 +56,7 @@ export function rtfToText(rtfBytes: Uint8Array, cpLabel: string | null): string 
       if (c2 === '~') {
         if (!skipDepth) {
           flushBytes();
-          out.push(' ');
+          out.push(' ');
         }
         i++;
         continue;

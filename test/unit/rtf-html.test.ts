@@ -29,4 +29,9 @@ describe('rtfToText', () => {
     expect(text).not.toContain('fonttbl');
     expect(text).not.toContain('Arial');
   });
+
+  it('renders \\~ as a non-breaking space (U+00A0)', () => {
+    const out = rtfToText(enc('{\\rtf1\\ansi a\\~b}'), 'windows-1252');
+    expect(out).toContain(' ');
+  });
 });
