@@ -7,8 +7,15 @@ export function rtfToText(rtfBytes: Uint8Array, cpLabel: string | null): string 
   let i = 0;
   const n = s.length;
   const skipGroups: Record<string, number> = {
-    fonttbl: 1, colortbl: 1, stylesheet: 1, info: 1, pict: 1,
-    generator: 1, themedata: 1, colorschememapping: 1, datastore: 1,
+    fonttbl: 1,
+    colortbl: 1,
+    stylesheet: 1,
+    info: 1,
+    pict: 1,
+    generator: 1,
+    themedata: 1,
+    colorschememapping: 1,
+    datastore: 1,
   };
   let skipDepth = 0;
   let depth = 0;
@@ -87,5 +94,8 @@ export function rtfToText(rtfBytes: Uint8Array, cpLabel: string | null): string 
     i++;
   }
   flushBytes();
-  return out.join('').replace(/\n{3,}/g, '\n\n').trim();
+  return out
+    .join('')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }

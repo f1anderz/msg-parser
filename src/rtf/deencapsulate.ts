@@ -1,8 +1,20 @@
 import { codepageToLabel, decodeBytes } from '../encoding/index.js';
 
 const CHARSET_TO_CP: Record<number, number> = {
-  0: 1252, 128: 932, 129: 949, 134: 936, 136: 950, 161: 1253, 162: 1254,
-  163: 1258, 177: 1255, 178: 1256, 186: 1257, 204: 1251, 222: 874, 238: 1250,
+  0: 1252,
+  128: 932,
+  129: 949,
+  134: 936,
+  136: 950,
+  161: 1253,
+  162: 1254,
+  163: 1258,
+  177: 1255,
+  178: 1256,
+  186: 1257,
+  204: 1251,
+  222: 874,
+  238: 1250,
 };
 
 function rtfFontCodepages(s: string, defaultLabel: string): Record<string, string> {
@@ -25,8 +37,14 @@ export function deencapsulateHtml(rtfBytes: Uint8Array): string | null {
   const fontCp = rtfFontCodepages(s, defaultCp);
   let curCp = defaultCp;
   const destSkip: Record<string, number> = {
-    fonttbl: 1, colortbl: 1, stylesheet: 1, info: 1, generator: 1,
-    pntext: 1, themedata: 1, colorschememapping: 1,
+    fonttbl: 1,
+    colortbl: 1,
+    stylesheet: 1,
+    info: 1,
+    generator: 1,
+    pntext: 1,
+    themedata: 1,
+    colorschememapping: 1,
   };
   const out: string[] = [];
   let pending: number[] = [];

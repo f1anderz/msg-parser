@@ -47,17 +47,34 @@ export function parseFixedProps(
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   for (let off = headerSize; off + 16 <= bytes.length; off += 16) {
     const type = dv.getUint16(off, true);
-    const id = dv.getUint16(off + 2, true).toString(16).toUpperCase().padStart(4, '0');
+    const id = dv
+      .getUint16(off + 2, true)
+      .toString(16)
+      .toUpperCase()
+      .padStart(4, '0');
     if (props[id]) continue; // substream wins
     let value: unknown;
     switch (type) {
-      case 0x0002: value = dv.getInt16(off + 8, true); break;
-      case 0x0003: value = dv.getInt32(off + 8, true); break;
-      case 0x000b: value = dv.getUint8(off + 8) !== 0; break;
-      case 0x0005: value = dv.getFloat64(off + 8, true); break;
-      case 0x0014: value = Number(dv.getBigInt64(off + 8, true)); break;
-      case 0x0040: value = filetimeToDate(dv.getUint32(off + 8, true), dv.getUint32(off + 12, true)); break;
-      default: continue; // variable types store only a size here
+      case 0x0002:
+        value = dv.getInt16(off + 8, true);
+        break;
+      case 0x0003:
+        value = dv.getInt32(off + 8, true);
+        break;
+      case 0x000b:
+        value = dv.getUint8(off + 8) !== 0;
+        break;
+      case 0x0005:
+        value = dv.getFloat64(off + 8, true);
+        break;
+      case 0x0014:
+        value = Number(dv.getBigInt64(off + 8, true));
+        break;
+      case 0x0040:
+        value = filetimeToDate(dv.getUint32(off + 8, true), dv.getUint32(off + 12, true));
+        break;
+      default:
+        continue; // variable types store only a size here
     }
     props[id] = { type: type.toString(16).padStart(4, '0').toUpperCase(), value };
   }
@@ -85,7 +102,12 @@ export function detectCodepage(props: Record<string, RawProp>): string | null {
     const q = props['3FDE'];
     cp = q && 'value' in q ? (q.value as number) : null;
     const iso2022: Record<number, number> = {
-      50220: 932, 50221: 932, 50222: 932, 50225: 949, 50227: 936, 52936: 936,
+      50220: 932,
+      50221: 932,
+      50222: 932,
+      50225: 949,
+      50227: 936,
+      52936: 936,
     };
     if (cp && iso2022[cp]) cp = iso2022[cp]!;
   }

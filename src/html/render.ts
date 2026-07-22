@@ -111,8 +111,7 @@ export function renderToHtml(
   input: MsgMessage | ArrayBuffer | Uint8Array,
   options: RenderOptions = {},
 ): string {
-  const msg =
-    input instanceof ArrayBuffer || input instanceof Uint8Array ? parseMsg(input) : input;
+  const msg = input instanceof ArrayBuffer || input instanceof Uint8Array ? parseMsg(input) : input;
   const inner =
     '<div class="msgp">' +
     buildHead(msg, options) +

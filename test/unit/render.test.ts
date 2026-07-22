@@ -74,7 +74,13 @@ describe('renderToHtml', () => {
     const html = renderToHtml(
       msg({
         attachments: [
-          { name: 'doc.pdf', mime: 'application/pdf', contentId: null, hidden: false, data: new Uint8Array(2048) },
+          {
+            name: 'doc.pdf',
+            mime: 'application/pdf',
+            contentId: null,
+            hidden: false,
+            data: new Uint8Array(2048),
+          },
         ],
       }),
     );

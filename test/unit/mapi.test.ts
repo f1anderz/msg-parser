@@ -30,7 +30,10 @@ describe('readSubStorageProps + makeGetter', () => {
 
   it('collects recipient/attachment substorages', () => {
     const buf = buildCfb({
-      storages: [{ name: '__recip_version1.0_#00000000' }, { name: '__attach_version1.0_#00000000' }],
+      storages: [
+        { name: '__recip_version1.0_#00000000' },
+        { name: '__attach_version1.0_#00000000' },
+      ],
     });
     const cfb = new Cfb(buf);
     const { subStorages } = readSubStorageProps(cfb, 0);

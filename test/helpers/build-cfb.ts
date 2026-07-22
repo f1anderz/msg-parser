@@ -138,7 +138,8 @@ export function buildCfb(root: BuildStorage): ArrayBuffer {
   dv.setUint32(64, 0, true); // number of mini FAT sectors
   dv.setUint32(68, ENDOFCHAIN, true); // first DIFAT sector
   dv.setUint32(72, 0, true); // number of DIFAT sectors
-  for (let i = 0; i < 109; i++) dv.setUint32(76 + i * 4, i < fatSectors ? fatStart + i : FREESECT, true);
+  for (let i = 0; i < 109; i++)
+    dv.setUint32(76 + i * 4, i < fatSectors ? fatStart + i : FREESECT, true);
 
   // FAT table (mark stream chains, directory chain, and FAT sectors).
   const fat = new Uint32Array(fatSectors * 128).fill(FREESECT);

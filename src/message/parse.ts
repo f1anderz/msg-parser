@@ -1,11 +1,6 @@
 import { Cfb } from '../cfb/index.js';
 import { codepageToLabel } from '../encoding/index.js';
-import {
-  detectCodepage,
-  makeGetter,
-  parseFixedProps,
-  readSubStorageProps,
-} from '../mapi/index.js';
+import { detectCodepage, makeGetter, parseFixedProps, readSubStorageProps } from '../mapi/index.js';
 import { decompressRtf, deencapsulateHtml, rtfToText } from '../rtf/index.js';
 import type { MsgMessage } from '../types.js';
 
@@ -35,7 +30,12 @@ function parseStorageAsMessage(cfb: Cfb, entryIndex: number, isTopLevel: boolean
     subject: asString(get('0037')) ?? asString(get('0E1D')) ?? '',
     senderName: asString(get('5D02')) ?? asString(get('0C1A')) ?? asString(get('0042')) ?? '',
     senderEmail: asString(get('5D01')) ?? asString(get('5D0A')) ?? null,
-    date: get('0E06') instanceof Date ? (get('0E06') as Date) : (get('0039') instanceof Date ? (get('0039') as Date) : null),
+    date:
+      get('0E06') instanceof Date
+        ? (get('0E06') as Date)
+        : get('0039') instanceof Date
+          ? (get('0039') as Date)
+          : null,
     headers: asString(get('007D')),
     recipients: [],
     attachments: [],
@@ -54,7 +54,8 @@ function parseStorageAsMessage(cfb: Cfb, entryIndex: number, isTopLevel: boolean
   if (htmlProp && htmlProp.type === '001F') {
     msg.bodyHtml = asString(get('1013'));
   } else if (htmlProp && htmlProp.bytes) {
-    const cp3fde = props['3FDE'] && 'value' in props['3FDE'] ? (props['3FDE'].value as number) : null;
+    const cp3fde =
+      props['3FDE'] && 'value' in props['3FDE'] ? (props['3FDE'].value as number) : null;
     const htmlCp = codepageToLabel(cp3fde) || cpLabel;
     msg.bodyHtml = decodeHtmlBody(htmlProp.bytes, htmlCp);
   }
@@ -102,8 +103,7 @@ function parseStorageAsMessage(cfb: Cfb, entryIndex: number, isTopLevel: boolean
       const ag = makeGetter(a.props, cpLabel);
       const dataProp = a.props['3701'];
       const att = {
-        name:
-          asString(ag('3707')) ?? asString(ag('3704')) ?? asString(ag('3001')) ?? 'attachment',
+        name: asString(ag('3707')) ?? asString(ag('3704')) ?? asString(ag('3001')) ?? 'attachment',
         mime: asString(ag('370E')),
         contentId: asString(ag('3712')),
         hidden: ag('7FFE') === true,
