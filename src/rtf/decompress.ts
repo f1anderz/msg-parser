@@ -1,3 +1,5 @@
+const MAX_RTF_OUTPUT = 100 * 1024 * 1024;
+
 const LZFU_PREFILL =
   '{\\rtf1\\ansi\\mac\\deff0\\deftab720{\\fonttbl;}{\\f0\\fnil \\froman \\fswiss ' +
   '\\fmodern \\fscript \\fdecor MS Sans SerifSymbolArialTimes New RomanCourier' +
@@ -10,8 +12,9 @@ export function decompressRtf(bytes: Uint8Array): Uint8Array | null {
   const compSize = dv.getUint32(0, true);
   const rawSize = dv.getUint32(4, true);
   const magic = dv.getUint32(8, true);
+  if (magic !== 0x414c454d && magic !== 0x75465a4c) return null; // not "MELA" nor "LZFu"
+  if (rawSize > MAX_RTF_OUTPUT) return null;
   if (magic === 0x414c454d) return bytes.slice(16, 16 + rawSize); // "MELA" — uncompressed
-  if (magic !== 0x75465a4c) return null; // not "LZFu"
   const dict = new Uint8Array(4096);
   for (let i = 0; i < LZFU_PREFILL.length; i++) dict[i] = LZFU_PREFILL.charCodeAt(i) & 0xff;
   let wp = LZFU_PREFILL.length;

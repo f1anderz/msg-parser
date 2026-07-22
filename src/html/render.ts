@@ -43,8 +43,11 @@ function fmtWho(name: string, email: string | null): string {
   return h || '<span>—</span>';
 }
 
+const MIME_RE = /^[\w.+-]+\/[\w.+-]+$/;
+
 function dataUri(att: MsgAttachment): string {
-  return 'data:' + (att.mime || 'application/octet-stream') + ';base64,' + toBase64(att.data!);
+  const mime = att.mime && MIME_RE.test(att.mime) ? att.mime : 'application/octet-stream';
+  return 'data:' + mime + ';base64,' + toBase64(att.data!);
 }
 
 function buildBody(msg: MsgMessage, options: RenderOptions): string {

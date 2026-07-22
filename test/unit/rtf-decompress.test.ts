@@ -26,6 +26,17 @@ describe('decompressRtf', () => {
     expect(new TextDecoder().decode(out!)).toBe('{\\rtf1 hello}');
   });
 
+  it('rejects an implausibly large rawSize instead of allocating it (avoids huge allocation)', () => {
+    const rawSize = 0x7fffffff;
+    const bytes = new Uint8Array([
+      ...u32le(16),
+      ...u32le(rawSize),
+      ...u32le(0x75465a4c), // "LZFu"
+      ...u32le(0),
+    ]);
+    expect(decompressRtf(bytes)).toBeNull();
+  });
+
   it('decompresses an LZFu stream of pure literals', () => {
     // control byte 0x00 => next 8 bytes are literals
     const literals = [0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48]; // ABCDEFGH

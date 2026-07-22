@@ -146,19 +146,23 @@ export class Cfb {
   }
 
   readStream(entry: CfbEntry): Uint8Array {
-    const size = entry.size;
-    const out = new Uint8Array(size);
+    const declaredSize = entry.size;
     let pos = 0;
-    if (entry === this.entries[0] || size >= this.miniStreamCutoff) {
+    if (entry === this.entries[0] || declaredSize >= this.miniStreamCutoff) {
       const chain = this.chain(entry.startSector, this.fat);
+      const size = Math.min(declaredSize, chain.length * this.sectorSize);
+      const out = new Uint8Array(size);
       for (let i = 0; i < chain.length && pos < size; i++) {
         const off = this.sectorOffset(chain[i]!);
         const n = Math.min(this.sectorSize, size - pos);
         out.set(this.bytes.subarray(off, off + n), pos);
         pos += n;
       }
+      return out;
     } else {
       const mchain = this.chain(entry.startSector, this.miniFat);
+      const size = Math.min(declaredSize, mchain.length * this.miniSectorSize);
+      const out = new Uint8Array(size);
       for (let i = 0; i < mchain.length && pos < size; i++) {
         const byteOff = mchain[i]! * this.miniSectorSize;
         const sIdx = byteOff >> this.sectorShift;
@@ -168,8 +172,8 @@ export class Cfb {
         out.set(this.bytes.subarray(off, off + n), pos);
         pos += n;
       }
+      return out;
     }
-    return out;
   }
 
   children(entryIndex: number): { index: number; entry: CfbEntry }[] {

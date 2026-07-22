@@ -38,6 +38,15 @@ describe('sanitizeHtml', () => {
     expect(clean).not.toContain('onclick');
     expect(clean).not.toContain('javascript:');
   });
+
+  it('strips event handlers and javascript: URIs bypassed via a `/` attribute separator', () => {
+    const svg = sanitizeHtml('<svg/onload=alert(1)>');
+    expect(svg).not.toContain('onload');
+
+    const link = sanitizeHtml('<a/href="javascript:evil()">x</a>');
+    expect(link).not.toContain('javascript:');
+    expect(link).toContain('blocked:');
+  });
 });
 
 describe('renderToHtml', () => {
@@ -68,6 +77,27 @@ describe('renderToHtml', () => {
     );
     expect(html).toContain('data:image/png;base64,');
     expect(html).not.toContain('cid:img1');
+  });
+
+  it('neutralizes a malicious mime type instead of splicing it unescaped into the src attribute', () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const html = renderToHtml(
+      msg({
+        bodyHtml: '<img src="cid:img1">',
+        attachments: [
+          {
+            name: 'i.png',
+            mime: 'x"><a href="https://evil/phish">x</a><img src="x',
+            contentId: 'img1',
+            hidden: true,
+            data: png,
+          },
+        ],
+      }),
+    );
+    expect(html).not.toContain('<a href="https://evil/phish"');
+    expect(html).not.toContain('"><a');
+    expect(html).toContain('data:application/octet-stream;base64,');
   });
 
   it('lists visible attachments with size', () => {

@@ -54,12 +54,21 @@ const html = renderToHtml(msg, { locale: 'uk-UA', blockRemoteImages: true });
 `RenderOptions`: `locale`, `formatDate`, `showHiddenAttachments`, `inlineImages`,
 `blockRemoteImages`, `fragment`.
 
+`parseMsg` (and therefore `renderToHtml`/`renderMsgFile`) throws `InvalidMsgError` when given a
+buffer that isn't a valid `.msg` (missing OLE Compound File signature) or is otherwise corrupt.
+
+`renderMsgFile`'s `File`/`Blob` overload types require the DOM lib (or `@types/node`'s DOM-ish
+globals) to be available in the consumer's TypeScript config; browser app configs already include
+this by default.
+
 ## Security
 
 `renderToHtml` output is intended to be rendered inside a **sandboxed iframe without
 `allow-scripts`** — that is the real security boundary. The library additionally strips
 `<script>`, `on*=` handlers, and `javascript:` URLs as defense-in-depth. Set
-`blockRemoteImages: true` to neutralize external image loads.
+`blockRemoteImages: true` to neutralize external `<img>` sources only — it is not a
+comprehensive remote-resource blocker and does not stop CSS `url(...)`, `<link>`, or
+`@import` loads.
 
 ## Scope
 
