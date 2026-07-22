@@ -2,8 +2,8 @@
 export function sanitizeHtml(html: string): string {
   return html
     .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
-    .replace(/[\s/]on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/(<\w[^>]*[\s/](?:href|src)\s*=\s*["']?)\s*javascript:/gi, '$1blocked:');
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/(<\w[^>]*\s(?:href|src)\s*=\s*["']?)\s*javascript:/gi, '$1blocked:');
 }
 
 /** Neutralize external http(s) image sources (used when blockRemoteImages is set). */

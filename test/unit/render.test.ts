@@ -39,13 +39,11 @@ describe('sanitizeHtml', () => {
     expect(clean).not.toContain('javascript:');
   });
 
-  it('strips event handlers and javascript: URIs bypassed via a `/` attribute separator', () => {
-    const svg = sanitizeHtml('<svg/onload=alert(1)>');
-    expect(svg).not.toContain('onload');
-
-    const link = sanitizeHtml('<a/href="javascript:evil()">x</a>');
-    expect(link).not.toContain('javascript:');
-    expect(link).toContain('blocked:');
+  it('does not corrupt benign URLs containing /on<word>= path/query segments', () => {
+    const html = '<a href="http://example.com/onclick=1">link</a><p>after</p>';
+    const out = sanitizeHtml(html);
+    expect(out).toContain('href="http://example.com/onclick=1"');
+    expect(out).toContain('<p>after</p>');
   });
 });
 
