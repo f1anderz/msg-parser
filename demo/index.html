@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>msg-previewer demo</title>
+    <style>
+      body {
+        font: 15px/1.5 sans-serif;
+        margin: 2rem;
+      }
+      #drop {
+        border: 2px dashed #99a;
+        border-radius: 10px;
+        padding: 2rem;
+        text-align: center;
+      }
+      iframe {
+        width: 100%;
+        height: 70vh;
+        border: 1px solid #ccc;
+        margin-top: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>msg-previewer demo</h1>
+    <div id="drop">Drop a .msg file here, or <input type="file" id="file" accept=".msg" /></div>
+    <iframe id="view" sandbox></iframe>
+    <script type="module">
+      import { renderMsgFile } from '../dist/index.mjs';
+      const view = document.getElementById('view');
+      async function show(file) {
+        view.srcdoc = await renderMsgFile(file);
+      }
+      document.getElementById('file').addEventListener('change', (e) => show(e.target.files[0]));
+      const drop = document.getElementById('drop');
+      drop.addEventListener('dragover', (e) => e.preventDefault());
+      drop.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files[0]) show(e.dataTransfer.files[0]);
+      });
+    </script>
+  </body>
+</html>

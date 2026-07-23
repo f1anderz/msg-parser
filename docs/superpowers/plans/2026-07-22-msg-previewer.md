@@ -26,27 +26,60 @@
 ## Task 1: Repository scaffold
 
 **Files:**
+
 - Create: `package.json`, `tsconfig.json`, `tsup.config.ts`, `vitest.config.ts`, `eslint.config.js`, `.prettierrc`, `.prettierignore`, `.gitignore` (exists — extend)
 - Create: `src/index.ts`, `src/types.ts`
 - Test: `test/unit/smoke.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: a buildable, lintable, testable package skeleton exporting the public types and a placeholder `version` constant. Public type shapes (used by every later task):
+
   ```ts
-  interface MsgRecipient { name: string; email: string | null; type: 'to' | 'cc' | 'bcc'; }
-  interface MsgAttachment { name: string; mime: string | null; contentId: string | null; hidden: boolean; data: Uint8Array | null; }
-  interface MsgMessage { subject: string; senderName: string; senderEmail: string | null; date: Date | null; headers: string | null; recipients: MsgRecipient[]; bodyHtml: string | null; bodyText: string | null; bodyRtf: Uint8Array | null; attachments: MsgAttachment[]; }
-  interface RenderOptions { locale?: string; formatDate?: (d: Date) => string; showHiddenAttachments?: boolean; inlineImages?: boolean; blockRemoteImages?: boolean; fragment?: boolean; }
+  interface MsgRecipient {
+    name: string;
+    email: string | null;
+    type: 'to' | 'cc' | 'bcc';
+  }
+  interface MsgAttachment {
+    name: string;
+    mime: string | null;
+    contentId: string | null;
+    hidden: boolean;
+    data: Uint8Array | null;
+  }
+  interface MsgMessage {
+    subject: string;
+    senderName: string;
+    senderEmail: string | null;
+    date: Date | null;
+    headers: string | null;
+    recipients: MsgRecipient[];
+    bodyHtml: string | null;
+    bodyText: string | null;
+    bodyRtf: Uint8Array | null;
+    attachments: MsgAttachment[];
+  }
+  interface RenderOptions {
+    locale?: string;
+    formatDate?: (d: Date) => string;
+    showHiddenAttachments?: boolean;
+    inlineImages?: boolean;
+    blockRemoteImages?: boolean;
+    fragment?: boolean;
+  }
   ```
 
 - [ ] **Step 1: Install tooling at latest stable**
 
 Run:
+
 ```bash
 npm init -y
 npm i -D typescript@latest tsup@latest vitest@latest @vitest/coverage-v8@latest eslint@latest @eslint/js@latest typescript-eslint@latest prettier@latest
 ```
+
 Expected: installs succeed; `node_modules/` and `package-lock.json` created.
 
 - [ ] **Step 2: Write `package.json`** (replace the generated one)
@@ -173,20 +206,26 @@ export default tseslint.config(
 - [ ] **Step 7: Write `.prettierrc`, `.prettierignore`, extend `.gitignore`**
 
 `.prettierrc`:
+
 ```json
 { "singleQuote": true, "semi": true, "trailingComma": "all", "printWidth": 100 }
 ```
+
 `.prettierignore`:
+
 ```
 dist
 node_modules
 coverage
 reference
 ```
+
 Append to `.gitignore` (already contains `node_modules/`, `dist/`, `coverage/`):
+
 ```
 package-lock.json
 ```
+
 Note: keep `package-lock.json` out of git for a library, or commit it per team preference. Default here: ignore it.
 
 - [ ] **Step 8: Write `src/types.ts`**
@@ -272,9 +311,11 @@ describe('package smoke', () => {
 - [ ] **Step 11: Run the full toolchain**
 
 Run:
+
 ```bash
 npm run typecheck && npm run lint && npm test && npm run build
 ```
+
 Expected: typecheck clean; ESLint no errors; 2 tests pass; `dist/index.mjs`, `dist/index.cjs`, `dist/index.d.ts` produced.
 
 - [ ] **Step 12: Commit**
@@ -289,10 +330,12 @@ git commit -m "chore: scaffold msg-previewer package (ts, tsup, vitest, eslint, 
 ## Task 2: encoding module
 
 **Files:**
+
 - Create: `src/encoding/codepage.ts`, `src/encoding/decode.ts`, `src/encoding/index.ts`
 - Test: `test/unit/encoding.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   ```ts
@@ -435,18 +478,22 @@ git commit -m "feat: add encoding module (codepage, decode, filetime)"
 ## Task 3: CFB (OLE Compound File) reader + test builder
 
 **Files:**
+
 - Create: `src/cfb/cfb.ts`, `src/cfb/index.ts`
 - Create: `test/helpers/build-cfb.ts` (test-only synthetic compound-file builder)
 - Test: `test/unit/cfb.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   ```ts
   interface CfbEntry {
     name: string;
     type: number; // 0=unused, 1=storage, 2=stream, 5=root
-    left: number; right: number; child: number;
+    left: number;
+    right: number;
+    child: number;
     startSector: number;
     size: number;
   }
@@ -601,7 +648,8 @@ export function buildCfb(root: BuildStorage): ArrayBuffer {
   dv.setUint32(64, 0, true); // number of mini FAT sectors
   dv.setUint32(68, ENDOFCHAIN, true); // first DIFAT sector
   dv.setUint32(72, 0, true); // number of DIFAT sectors
-  for (let i = 0; i < 109; i++) dv.setUint32(76 + i * 4, i < fatSectors ? fatStart + i : FREESECT, true);
+  for (let i = 0; i < 109; i++)
+    dv.setUint32(76 + i * 4, i < fatSectors ? fatStart + i : FREESECT, true);
 
   // FAT table (mark stream chains, directory chain, and FAT sectors).
   const fat = new Uint32Array(fatSectors * 128).fill(FREESECT);
@@ -923,10 +971,12 @@ git commit -m "feat: add CFB compound-file reader with synthetic test builder"
 ## Task 4: RTF decompression (LZFu / MELA)
 
 **Files:**
+
 - Create: `src/rtf/decompress.ts`
 - Test: `test/unit/rtf-decompress.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `function decompressRtf(bytes: Uint8Array): Uint8Array | null;` — consumed by `message` and re-exported publicly.
 
@@ -1062,10 +1112,12 @@ git commit -m "feat: add RTF LZFu/MELA decompression"
 ## Task 5: RTF → HTML de-encapsulation and RTF → text
 
 **Files:**
+
 - Create: `src/rtf/deencapsulate.ts`, `src/rtf/to-text.ts`, `src/rtf/index.ts`
 - Test: `test/unit/rtf-html.test.ts`
 
 **Interfaces:**
+
 - Consumes: `decodeBytes`, `codepageToLabel` from `encoding`; `decompressRtf` re-export.
 - Produces:
   ```ts
@@ -1126,8 +1178,20 @@ Port `CHARSET_TO_CP`, `rtfFontCodepages`, and `rtfDeencapsulateHtml` from the re
 import { codepageToLabel, decodeBytes } from '../encoding/index.js';
 
 const CHARSET_TO_CP: Record<number, number> = {
-  0: 1252, 128: 932, 129: 949, 134: 936, 136: 950, 161: 1253, 162: 1254,
-  163: 1258, 177: 1255, 178: 1256, 186: 1257, 204: 1251, 222: 874, 238: 1250,
+  0: 1252,
+  128: 932,
+  129: 949,
+  134: 936,
+  136: 950,
+  161: 1253,
+  162: 1254,
+  163: 1258,
+  177: 1255,
+  178: 1256,
+  186: 1257,
+  204: 1251,
+  222: 874,
+  238: 1250,
 };
 
 function rtfFontCodepages(s: string, defaultLabel: string): Record<string, string> {
@@ -1150,8 +1214,14 @@ export function deencapsulateHtml(rtfBytes: Uint8Array): string | null {
   const fontCp = rtfFontCodepages(s, defaultCp);
   let curCp = defaultCp;
   const destSkip: Record<string, number> = {
-    fonttbl: 1, colortbl: 1, stylesheet: 1, info: 1, generator: 1,
-    pntext: 1, themedata: 1, colorschememapping: 1,
+    fonttbl: 1,
+    colortbl: 1,
+    stylesheet: 1,
+    info: 1,
+    generator: 1,
+    pntext: 1,
+    themedata: 1,
+    colorschememapping: 1,
   };
   const out: string[] = [];
   let pending: number[] = [];
@@ -1272,8 +1342,15 @@ export function rtfToText(rtfBytes: Uint8Array, cpLabel: string | null): string 
   let i = 0;
   const n = s.length;
   const skipGroups: Record<string, number> = {
-    fonttbl: 1, colortbl: 1, stylesheet: 1, info: 1, pict: 1,
-    generator: 1, themedata: 1, colorschememapping: 1, datastore: 1,
+    fonttbl: 1,
+    colortbl: 1,
+    stylesheet: 1,
+    info: 1,
+    pict: 1,
+    generator: 1,
+    themedata: 1,
+    colorschememapping: 1,
+    datastore: 1,
   };
   let skipDepth = 0;
   let depth = 0;
@@ -1352,7 +1429,10 @@ export function rtfToText(rtfBytes: Uint8Array, cpLabel: string | null): string 
     i++;
   }
   flushBytes();
-  return out.join('').replace(/\n{3,}/g, '\n\n').trim();
+  return out
+    .join('')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 ```
 
@@ -1381,18 +1461,36 @@ git commit -m "feat: add RTF HTML de-encapsulation and text fallback"
 ## Task 6: MAPI property extraction
 
 **Files:**
+
 - Create: `src/mapi/props.ts`, `src/mapi/index.ts`
 - Test: `test/unit/mapi.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Cfb`, `CfbEntry` from `cfb`; `decodeBytes`, `decodeUtf16le`, `filetimeToDate`, `codepageToLabel` from `encoding`.
 - Produces:
   ```ts
-  interface RawProp { type: string; bytes?: Uint8Array; value?: unknown; storageIndex?: number; }
-  interface StorageProps { props: Record<string, RawProp>; fixed?: Uint8Array; subStorages: { name: string; index: number }[]; }
+  interface RawProp {
+    type: string;
+    bytes?: Uint8Array;
+    value?: unknown;
+    storageIndex?: number;
+  }
+  interface StorageProps {
+    props: Record<string, RawProp>;
+    fixed?: Uint8Array;
+    subStorages: { name: string; index: number }[];
+  }
   function readSubStorageProps(cfb: Cfb, entryIndex: number): StorageProps;
-  function parseFixedProps(bytes: Uint8Array | undefined, headerSize: number, props: Record<string, RawProp>): void;
-  function makeGetter(props: Record<string, RawProp>, cpLabel: string | null): (id: string) => string | number | boolean | Date | Uint8Array | null;
+  function parseFixedProps(
+    bytes: Uint8Array | undefined,
+    headerSize: number,
+    props: Record<string, RawProp>,
+  ): void;
+  function makeGetter(
+    props: Record<string, RawProp>,
+    cpLabel: string | null,
+  ): (id: string) => string | number | boolean | Date | Uint8Array | null;
   function detectCodepage(props: Record<string, RawProp>): string | null;
   ```
   Consumed by `message`.
@@ -1434,7 +1532,10 @@ describe('readSubStorageProps + makeGetter', () => {
 
   it('collects recipient/attachment substorages', () => {
     const buf = buildCfb({
-      storages: [{ name: '__recip_version1.0_#00000000' }, { name: '__attach_version1.0_#00000000' }],
+      storages: [
+        { name: '__recip_version1.0_#00000000' },
+        { name: '__attach_version1.0_#00000000' },
+      ],
     });
     const cfb = new Cfb(buf);
     const { subStorages } = readSubStorageProps(cfb, 0);
@@ -1524,17 +1625,34 @@ export function parseFixedProps(
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   for (let off = headerSize; off + 16 <= bytes.length; off += 16) {
     const type = dv.getUint16(off, true);
-    const id = dv.getUint16(off + 2, true).toString(16).toUpperCase().padStart(4, '0');
+    const id = dv
+      .getUint16(off + 2, true)
+      .toString(16)
+      .toUpperCase()
+      .padStart(4, '0');
     if (props[id]) continue; // substream wins
     let value: unknown = null;
     switch (type) {
-      case 0x0002: value = dv.getInt16(off + 8, true); break;
-      case 0x0003: value = dv.getInt32(off + 8, true); break;
-      case 0x000b: value = dv.getUint8(off + 8) !== 0; break;
-      case 0x0005: value = dv.getFloat64(off + 8, true); break;
-      case 0x0014: value = Number(dv.getBigInt64(off + 8, true)); break;
-      case 0x0040: value = filetimeToDate(dv.getUint32(off + 8, true), dv.getUint32(off + 12, true)); break;
-      default: continue; // variable types store only a size here
+      case 0x0002:
+        value = dv.getInt16(off + 8, true);
+        break;
+      case 0x0003:
+        value = dv.getInt32(off + 8, true);
+        break;
+      case 0x000b:
+        value = dv.getUint8(off + 8) !== 0;
+        break;
+      case 0x0005:
+        value = dv.getFloat64(off + 8, true);
+        break;
+      case 0x0014:
+        value = Number(dv.getBigInt64(off + 8, true));
+        break;
+      case 0x0040:
+        value = filetimeToDate(dv.getUint32(off + 8, true), dv.getUint32(off + 12, true));
+        break;
+      default:
+        continue; // variable types store only a size here
     }
     props[id] = { type: type.toString(16).padStart(4, '0').toUpperCase(), value };
   }
@@ -1562,7 +1680,12 @@ export function detectCodepage(props: Record<string, RawProp>): string | null {
     const q = props['3FDE'];
     cp = q && 'value' in q ? (q.value as number) : null;
     const iso2022: Record<number, number> = {
-      50220: 932, 50221: 932, 50222: 932, 50225: 949, 50227: 936, 52936: 936,
+      50220: 932,
+      50221: 932,
+      50222: 932,
+      50225: 949,
+      50227: 936,
+      52936: 936,
     };
     if (cp && iso2022[cp]) cp = iso2022[cp];
   }
@@ -1573,12 +1696,7 @@ export function detectCodepage(props: Record<string, RawProp>): string | null {
 - [ ] **Step 4: Implement `src/mapi/index.ts`**
 
 ```ts
-export {
-  readSubStorageProps,
-  parseFixedProps,
-  makeGetter,
-  detectCodepage,
-} from './props.js';
+export { readSubStorageProps, parseFixedProps, makeGetter, detectCodepage } from './props.js';
 export type { RawProp, StorageProps } from './props.js';
 ```
 
@@ -1599,10 +1717,12 @@ git commit -m "feat: add MAPI property extraction"
 ## Task 7: message orchestrator (`parseMsg`)
 
 **Files:**
+
 - Create: `src/message/parse.ts`, `src/message/index.ts`
 - Test: `test/unit/parse.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Cfb` (cfb); `readSubStorageProps`, `parseFixedProps`, `makeGetter`, `detectCodepage` (mapi); `decompressRtf`, `deencapsulateHtml`, `rtfToText` (rtf); `codepageToLabel` (encoding); `MsgMessage`, `InvalidMsgError` (types).
 - Produces: `function parseMsg(input: ArrayBuffer | Uint8Array): MsgMessage;` — consumed by `html` and the public API.
 
@@ -1693,12 +1813,7 @@ Expected: FAIL — cannot resolve `../../src/message/index.js`.
 ```ts
 import { Cfb } from '../cfb/index.js';
 import { codepageToLabel } from '../encoding/index.js';
-import {
-  detectCodepage,
-  makeGetter,
-  parseFixedProps,
-  readSubStorageProps,
-} from '../mapi/index.js';
+import { detectCodepage, makeGetter, parseFixedProps, readSubStorageProps } from '../mapi/index.js';
 import { decompressRtf, deencapsulateHtml, rtfToText } from '../rtf/index.js';
 import type { MsgMessage } from '../types.js';
 
@@ -1728,7 +1843,12 @@ function parseStorageAsMessage(cfb: Cfb, entryIndex: number, isTopLevel: boolean
     subject: asString(get('0037')) ?? asString(get('0E1D')) ?? '',
     senderName: asString(get('5D02')) ?? asString(get('0C1A')) ?? asString(get('0042')) ?? '',
     senderEmail: asString(get('5D01')) ?? asString(get('5D0A')) ?? null,
-    date: get('0E06') instanceof Date ? (get('0E06') as Date) : (get('0039') instanceof Date ? (get('0039') as Date) : null),
+    date:
+      get('0E06') instanceof Date
+        ? (get('0E06') as Date)
+        : get('0039') instanceof Date
+          ? (get('0039') as Date)
+          : null,
     headers: asString(get('007D')),
     recipients: [],
     attachments: [],
@@ -1745,7 +1865,8 @@ function parseStorageAsMessage(cfb: Cfb, entryIndex: number, isTopLevel: boolean
   // HTML body
   const htmlProp = props['1013'];
   if (htmlProp && htmlProp.bytes) {
-    const cp3fde = props['3FDE'] && 'value' in props['3FDE'] ? (props['3FDE'].value as number) : null;
+    const cp3fde =
+      props['3FDE'] && 'value' in props['3FDE'] ? (props['3FDE'].value as number) : null;
     const htmlCp = codepageToLabel(cp3fde) || cpLabel;
     msg.bodyHtml = decodeHtmlBody(htmlProp.bytes, htmlCp);
   } else if (htmlProp && htmlProp.type === '001F') {
@@ -1795,8 +1916,7 @@ function parseStorageAsMessage(cfb: Cfb, entryIndex: number, isTopLevel: boolean
       const ag = makeGetter(a.props, cpLabel);
       const dataProp = a.props['3701'];
       const att = {
-        name:
-          asString(ag('3707')) ?? asString(ag('3704')) ?? asString(ag('3001')) ?? 'attachment',
+        name: asString(ag('3707')) ?? asString(ag('3704')) ?? asString(ag('3001')) ?? 'attachment',
         mime: asString(ag('370E')),
         contentId: asString(ag('3712')),
         hidden: ag('7FFE') === true,
@@ -1857,17 +1977,25 @@ git commit -m "feat: add parseMsg message orchestrator"
 ## Task 8: HTML renderer (`renderToHtml`, `renderMsgFile`) + public API
 
 **Files:**
+
 - Create: `src/html/sanitize.ts`, `src/html/styles.ts`, `src/html/render.ts`, `src/html/index.ts`
 - Modify: `src/index.ts`
 - Test: `test/unit/render.test.ts`
 
 **Interfaces:**
+
 - Consumes: `parseMsg` (message); `MsgMessage`, `MsgAttachment`, `RenderOptions` (types).
 - Produces:
   ```ts
   function sanitizeHtml(html: string): string;
-  function renderToHtml(input: MsgMessage | ArrayBuffer | Uint8Array, options?: RenderOptions): string;
-  function renderMsgFile(input: File | Blob | ArrayBuffer | Uint8Array, options?: RenderOptions): Promise<string>;
+  function renderToHtml(
+    input: MsgMessage | ArrayBuffer | Uint8Array,
+    options?: RenderOptions,
+  ): string;
+  function renderMsgFile(
+    input: File | Blob | ArrayBuffer | Uint8Array,
+    options?: RenderOptions,
+  ): Promise<string>;
   ```
   These plus `parseMsg`, `decompressRtf`, and the types form the public API.
 
@@ -1952,7 +2080,13 @@ describe('renderToHtml', () => {
     const html = renderToHtml(
       msg({
         attachments: [
-          { name: 'doc.pdf', mime: 'application/pdf', contentId: null, hidden: false, data: new Uint8Array(2048) },
+          {
+            name: 'doc.pdf',
+            mime: 'application/pdf',
+            contentId: null,
+            hidden: false,
+            data: new Uint8Array(2048),
+          },
         ],
       }),
     );
@@ -2143,8 +2277,7 @@ export function renderToHtml(
   input: MsgMessage | ArrayBuffer | Uint8Array,
   options: RenderOptions = {},
 ): string {
-  const msg =
-    input instanceof ArrayBuffer || input instanceof Uint8Array ? parseMsg(input) : input;
+  const msg = input instanceof ArrayBuffer || input instanceof Uint8Array ? parseMsg(input) : input;
   const inner =
     '<div class="msgp">' +
     buildHead(msg, options) +
@@ -2202,9 +2335,11 @@ Expected: PASS. Then run the whole suite: `npm test` — all unit tests green.
 - [ ] **Step 9: Full gate**
 
 Run:
+
 ```bash
 npm run typecheck && npm run lint && npm run coverage && npm run build
 ```
+
 Expected: typecheck clean; lint clean; coverage report shows core modules well-covered; `dist/` built with ESM/CJS/d.ts.
 
 - [ ] **Step 10: Commit**
@@ -2219,18 +2354,22 @@ git commit -m "feat: add HTML renderer and public API (renderToHtml, renderMsgFi
 ## Task 9: README, LICENSE, and demo page
 
 **Files:**
+
 - Create: `README.md`, `LICENSE`, `demo/index.html`
 
 **Interfaces:**
+
 - Consumes: the public API from Task 8.
 - Produces: user-facing docs and a manual-verification demo. No code interfaces.
 
 - [ ] **Step 1: Record resolved tool versions**
 
 Run:
+
 ```bash
 node -e "const p=require('./package.json');console.log(Object.entries(p.devDependencies).map(([k,v])=>k+' '+v).join('\n'))"
 ```
+
 Copy the output into the README "Tooling versions" section in Step 2.
 
 - [ ] **Step 2: Write `README.md`**
@@ -2282,12 +2421,12 @@ const html = renderToHtml(msg, { locale: 'uk-UA', blockRemoteImages: true });
 
 ## API
 
-| Export | Signature |
-| --- | --- |
-| `parseMsg` | `(input: ArrayBuffer \| Uint8Array) => MsgMessage` |
-| `renderToHtml` | `(input: MsgMessage \| ArrayBuffer \| Uint8Array, options?: RenderOptions) => string` |
+| Export          | Signature                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| `parseMsg`      | `(input: ArrayBuffer \| Uint8Array) => MsgMessage`                                               |
+| `renderToHtml`  | `(input: MsgMessage \| ArrayBuffer \| Uint8Array, options?: RenderOptions) => string`            |
 | `renderMsgFile` | `(input: File \| Blob \| ArrayBuffer \| Uint8Array, options?: RenderOptions) => Promise<string>` |
-| `decompressRtf` | `(bytes: Uint8Array) => Uint8Array \| null` |
+| `decompressRtf` | `(bytes: Uint8Array) => Uint8Array \| null`                                                      |
 
 `RenderOptions`: `locale`, `formatDate`, `showHiddenAttachments`, `inlineImages`,
 `blockRemoteImages`, `fragment`.
@@ -2327,9 +2466,22 @@ Use the standard MIT license text with `Copyright (c) 2026 Precoro`.
     <meta charset="utf-8" />
     <title>msg-previewer demo</title>
     <style>
-      body { font: 15px/1.5 sans-serif; margin: 2rem; }
-      #drop { border: 2px dashed #99a; border-radius: 10px; padding: 2rem; text-align: center; }
-      iframe { width: 100%; height: 70vh; border: 1px solid #ccc; margin-top: 1rem; }
+      body {
+        font: 15px/1.5 sans-serif;
+        margin: 2rem;
+      }
+      #drop {
+        border: 2px dashed #99a;
+        border-radius: 10px;
+        padding: 2rem;
+        text-align: center;
+      }
+      iframe {
+        width: 100%;
+        height: 70vh;
+        border: 1px solid #ccc;
+        margin-top: 1rem;
+      }
     </style>
   </head>
   <body>
@@ -2360,10 +2512,12 @@ Note: the demo imports from `dist/`, so run `npm run build` first, then serve th
 - [ ] **Step 5: Verify the demo builds and loads**
 
 Run:
+
 ```bash
 npm run build
 npx --yes serve -l 5055 . &
 ```
+
 Open `http://localhost:5055/demo/index.html`, confirm the page renders and the file picker is present. Stop the server afterward.
 
 - [ ] **Step 6: Commit**
@@ -2378,10 +2532,12 @@ git commit -m "docs: add README, LICENSE, and demo page"
 ## Task 10: Snapshot tests over real `.msg` samples
 
 **Files:**
+
 - Create: `test/helpers/serialize-message.ts`, `test/snapshot/message.test.ts`
 - Add: `test/fixtures/*.msg` (the sample files provided by the user)
 
 **Interfaces:**
+
 - Consumes: `parseMsg`, `renderToHtml`; sample `.msg` files.
 - Produces: committed Vitest snapshots of parsed data and rendered HTML for each sample.
 
@@ -2459,9 +2615,11 @@ describe.skipIf(files.length === 0)('snapshot: real .msg samples', () => {
 - [ ] **Step 3: Add sample files and run to generate snapshots**
 
 Copy the provided samples into `test/fixtures/`, then run:
+
 ```bash
 npx vitest run test/snapshot/message.test.ts
 ```
+
 Expected: on first run, snapshots are written under `test/snapshot/__snapshots__/`. Inspect
 them for correctness (subjects, recipients, body presence, attachment names/sizes look right).
 
@@ -2473,9 +2631,11 @@ Expected: PASS with "snapshots written: 0" — output is deterministic.
 - [ ] **Step 5: Final full gate**
 
 Run:
+
 ```bash
 npm run typecheck && npm run lint && npm run format:check && npm run coverage && npm run build
 ```
+
 Expected: everything green; coverage ≥ ~90% on `cfb`, `rtf`, `encoding`, `mapi`, `html`.
 
 - [ ] **Step 6: Commit**

@@ -1,0 +1,17 @@
+export const PREVIEW_CSS = [
+  '.msgp{font:14px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif;color:#1f2733;',
+  'border:1px solid #d7dde6;border-radius:10px;overflow:hidden;background:#fff}',
+  '.msgp-head{padding:16px 20px;border-bottom:1px solid #e6ebf2;background:#f7f9fc}',
+  '.msgp-subject{font-size:18px;font-weight:650;margin:0 0 10px}',
+  '.msgp-row{display:flex;gap:8px;margin:2px 0;font-size:13px}',
+  '.msgp-label{color:#69758a;min-width:56px;flex:none}',
+  '.msgp-who b{font-weight:600}.msgp-who span{color:#69758a}',
+  '.msgp-date{color:#69758a;font-size:12.5px;margin-top:6px}',
+  '.msgp-body{padding:16px 20px;word-wrap:break-word}',
+  '.msgp-body pre{margin:0;white-space:pre-wrap;word-wrap:break-word}',
+  '.msgp-atts{display:flex;flex-wrap:wrap;gap:8px;padding:12px 20px;border-top:1px solid #e6ebf2;background:#fafbfd}',
+  '.msgp-att{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #d7dde6;',
+  'border-radius:999px;font-size:12.5px;color:#1f2733;text-decoration:none;background:#fff}',
+  '.msgp-att .msgp-size{color:#69758a}',
+  '.msgp-empty{color:#69758a;font-style:italic}',
+].join('');
