@@ -6,7 +6,7 @@ export function sanitizeHtml(html: string): string {
   do {
     previous = sanitized;
     sanitized = sanitized
-      .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
+      .replace(/<script\b[\s\S]*?<\/script(?:\s+[^>]*)?>/gi, '')
       .replace(/\son[\w:-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']*)/gi, '')
       .replace(/(<\w[^>]*\s(?:href|src)\s*=\s*["']?)\s*javascript:/gi, '$1blocked:');
   } while (sanitized !== previous);
