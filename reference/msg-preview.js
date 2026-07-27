@@ -633,7 +633,7 @@
       previous = current;
       current = current
         .replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi, '')
-        .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+        .replace(/(\s)on([a-z0-9_-]*)(\s*=)/gi, '$1data-on$2$3')
         .replace(/(<\w[^>]*\s(?:href|src)\s*=\s*["']?)\s*javascript:/gi, '$1blocked:');
     } while (current !== previous);
     return current;
