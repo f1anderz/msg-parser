@@ -629,7 +629,7 @@
   function sanitizeHtml(html) {
     // Прибираємо скрипти/обробники — додатковий шар до sandbox-iframe
     return html
-      .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
+      .replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi, '')
       .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
       .replace(/(<\w[^>]*\s(?:href|src)\s*=\s*["']?)\s*javascript:/gi, '$1blocked:');
   }
