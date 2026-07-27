@@ -5,3 +5,5 @@ coverage/
 .DS_Store
 package-lock.json
 .idea/
+test/fixtures/msg-samples/
+test/snapshot/__snapshots__/message.test.ts.snap

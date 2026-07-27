@@ -6,7 +6,7 @@ import { parseMsg, renderToHtml } from '../../src/index.js';
 import { serializeMessage } from '../helpers/serialize-message.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fixturesDir = join(here, '..', 'fixtures');
+const fixturesDir = join(here, '..', 'fixtures', 'msg-samples');
 
 function listMsg(): string[] {
   try {
