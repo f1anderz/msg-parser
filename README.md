@@ -5,19 +5,28 @@ Dependency-free TypeScript library to parse and preview Outlook `.msg` files in 
 
 ## Install
 
-```bash
-# From git (MVP):
-npm install github:<org>/msg-previewer#v0.1.0
+Published to **GitHub Packages** under the `@precoro` scope. Point the scope at the GitHub
+registry once (project `.npmrc`), then install normally:
+
+```ini
+# .npmrc
+@precoro:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-The package's `prepare` script builds `dist/` automatically on install.
+```bash
+npm install @precoro/msg-previewer
+```
+
+`GITHUB_TOKEN` needs `read:packages` scope. Installs ship the prebuilt, minified `dist/`
+(no source, no build step).
 
 ## Usage
 
 ### One-liner for a file input (the common case)
 
 ```ts
-import { renderMsgFile } from 'msg-previewer';
+import { renderMsgFile } from '@precoro/msg-previewer';
 
 input.addEventListener('change', async () => {
   const html = await renderMsgFile(input.files[0]);
@@ -29,7 +38,7 @@ input.addEventListener('change', async () => {
 ### Parse to structured data
 
 ```ts
-import { parseMsg } from 'msg-previewer';
+import { parseMsg } from '@precoro/msg-previewer';
 
 const msg = parseMsg(await file.arrayBuffer());
 // { subject, senderName, senderEmail, date, recipients, bodyHtml, bodyText, attachments, ... }
@@ -38,7 +47,7 @@ const msg = parseMsg(await file.arrayBuffer());
 ### Render a parsed message
 
 ```ts
-import { renderToHtml } from 'msg-previewer';
+import { renderToHtml } from '@precoro/msg-previewer';
 const html = renderToHtml(msg, { locale: 'uk-UA', blockRemoteImages: true });
 ```
 
@@ -97,4 +106,5 @@ vitest 4.1.10
 ## License
 
 MIT
+
 # msg-parser

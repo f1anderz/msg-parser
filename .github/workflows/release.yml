@@ -7,7 +7,8 @@ on:
       - 'v*'
 
 permissions:
-  contents: write # needed to create the GitHub Release and upload the tarball
+  contents: write # create the GitHub Release and upload the tarball
+  packages: write # publish the package to GitHub Packages
 
 jobs:
   release:
@@ -15,9 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # registry-url + scope make setup-node write an .npmrc that authenticates
+      # `npm publish` to GitHub Packages using NODE_AUTH_TOKEN below.
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@precoro'
 
       # No committed lockfile in this repo, so use `npm install` (not `npm ci`).
       - name: Install dev dependencies
@@ -28,6 +33,13 @@ jobs:
 
       - name: Build minified, source-free bundle
         run: npm run build
+
+      # Publishes the minified, dist-only package to GitHub Packages. The built-in
+      # GITHUB_TOKEN authenticates to the same repo's package registry — no extra secret.
+      - name: Publish to GitHub Packages
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # `npm pack` honors package.json "files": ["dist"], so the tarball contains
       # only the minified dist + .d.ts types + README + LICENSE — never src/ or sourcemaps.
