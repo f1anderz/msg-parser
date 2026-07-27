@@ -7,7 +7,7 @@ Dependency-free TypeScript library to parse and preview Outlook `.msg` files in 
 
 ```bash
 # From git (MVP):
-npm install github:<org>/msg-parser#v0.1.0
+npm install github:f1anderz/msg-parser#v0.1.0
 ```
 
 The package's `prepare` script builds `dist/` automatically on install.
