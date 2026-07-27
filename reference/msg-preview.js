@@ -628,10 +628,15 @@
 
   function sanitizeHtml(html) {
     // Прибираємо скрипти/обробники — додатковий шар до sandbox-iframe
-    return html
-      .replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi, '')
-      .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-      .replace(/(<\w[^>]*\s(?:href|src)\s*=\s*["']?)\s*javascript:/gi, '$1blocked:');
+    var previous, current = String(html);
+    do {
+      previous = current;
+      current = current
+        .replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi, '')
+        .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+        .replace(/(<\w[^>]*\s(?:href|src)\s*=\s*["']?)\s*javascript:/gi, '$1blocked:');
+    } while (current !== previous);
+    return current;
   }
 
   function render(input, container, options) {
