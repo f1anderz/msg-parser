@@ -1,7 +1,7 @@
 /** Defense-in-depth HTML sanitization. The primary boundary is the consumer's sandboxed iframe. */
 export function sanitizeHtml(html: string): string {
   return html
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<\s*script\b[\s\S]*?<\/\s*script\b[^>]*>/gi, '')
     .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/(<\w[^>]*\s(?:href|src)\s*=\s*["']?)\s*javascript:/gi, '$1blocked:');
 }
