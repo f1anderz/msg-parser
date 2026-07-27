@@ -1,7 +1,6 @@
-# msg-previewer
+# msg-parser
 
-Dependency-free TypeScript library to parse and preview Outlook `.msg` files in the browser
-(and Node). Files are parsed locally — nothing is uploaded.
+Dependency-free TypeScript library to parse Outlook `.msg` files to HTML string. Files are parsed locally — nothing is uploaded.
 
 ## Install
 
@@ -15,7 +14,7 @@ registry once (project `.npmrc`), then install normally:
 ```
 
 ```bash
-npm install @precoro/msg-previewer
+npm install f1anderz/msg-parser
 ```
 
 `GITHUB_TOKEN` needs `read:packages` scope. Installs ship the prebuilt, minified `dist/`
@@ -26,7 +25,7 @@ npm install @precoro/msg-previewer
 ### One-liner for a file input (the common case)
 
 ```ts
-import { renderMsgFile } from '@precoro/msg-previewer';
+import { renderMsgFile } from 'f1anderz/msg-parser';
 
 input.addEventListener('change', async () => {
   const html = await renderMsgFile(input.files[0]);
@@ -38,7 +37,7 @@ input.addEventListener('change', async () => {
 ### Parse to structured data
 
 ```ts
-import { parseMsg } from '@precoro/msg-previewer';
+import { parseMsg } from 'f1anderz/msg-parser';
 
 const msg = parseMsg(await file.arrayBuffer());
 // { subject, senderName, senderEmail, date, recipients, bodyHtml, bodyText, attachments, ... }
@@ -47,7 +46,7 @@ const msg = parseMsg(await file.arrayBuffer());
 ### Render a parsed message
 
 ```ts
-import { renderToHtml } from '@precoro/msg-previewer';
+import { renderToHtml } from 'f1anderz/msg-parser';
 const html = renderToHtml(msg, { locale: 'uk-UA', blockRemoteImages: true });
 ```
 
