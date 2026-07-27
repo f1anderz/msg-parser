@@ -1,0 +1,40 @@
+name: Release
+
+# Triggers when you push a version tag, e.g.:  git push --tags  (after `npm version`)
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # needed to create the GitHub Release and upload the tarball
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No committed lockfile in this repo, so use `npm install` (not `npm ci`).
+      - name: Install dev dependencies
+        run: npm install
+
+      - name: Verify (typecheck, lint, tests)
+        run: npm run typecheck && npm run lint && npm test
+
+      - name: Build minified, source-free bundle
+        run: npm run build
+
+      # `npm pack` honors package.json "files": ["dist"], so the tarball contains
+      # only the minified dist + .d.ts types + README + LICENSE — never src/ or sourcemaps.
+      - name: Pack release tarball
+        run: npm pack
+
+      - name: Create GitHub Release with the built tarball attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" ./*.tgz --generate-notes --verify-tag
