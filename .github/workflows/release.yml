@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: '22'
           registry-url: 'https://npm.pkg.github.com'
-          scope: '@precoro'
+          scope: '@f1anderz'
 
       # No committed lockfile in this repo, so use `npm install` (not `npm ci`).
       - name: Install dev dependencies

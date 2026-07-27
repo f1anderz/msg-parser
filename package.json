@@ -1,11 +1,11 @@
 {
-  "name": "@precoro/msg-previewer",
+  "name": "@f1anderz/msg-parser",
   "version": "0.1.0",
   "description": "Dependency-free TypeScript library to parse and preview Outlook .msg files.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/precoro/msg-previewer.git"
+    "url": "git+https://github.com/f1anderz/msg-parser.git"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

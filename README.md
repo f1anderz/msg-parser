@@ -4,17 +4,17 @@ Dependency-free TypeScript library to parse Outlook `.msg` files to HTML string.
 
 ## Install
 
-Published to **GitHub Packages** under the `@precoro` scope. Point the scope at the GitHub
+Published to **GitHub Packages** under the `@f1anderz` scope. Point the scope at the GitHub
 registry once (project `.npmrc`), then install normally:
 
 ```ini
 # .npmrc
-@precoro:registry=https://npm.pkg.github.com
+@f1anderz:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
 ```bash
-npm install f1anderz/msg-parser
+npm install @f1anderz/msg-parser
 ```
 
 `GITHUB_TOKEN` needs `read:packages` scope. Installs ship the prebuilt, minified `dist/`
@@ -25,7 +25,7 @@ npm install f1anderz/msg-parser
 ### One-liner for a file input (the common case)
 
 ```ts
-import { renderMsgFile } from 'f1anderz/msg-parser';
+import { renderMsgFile } from '@f1anderz/msg-parser';
 
 input.addEventListener('change', async () => {
   const html = await renderMsgFile(input.files[0]);
@@ -37,7 +37,7 @@ input.addEventListener('change', async () => {
 ### Parse to structured data
 
 ```ts
-import { parseMsg } from 'f1anderz/msg-parser';
+import { parseMsg } from '@f1anderz/msg-parser';
 
 const msg = parseMsg(await file.arrayBuffer());
 // { subject, senderName, senderEmail, date, recipients, bodyHtml, bodyText, attachments, ... }
@@ -46,7 +46,7 @@ const msg = parseMsg(await file.arrayBuffer());
 ### Render a parsed message
 
 ```ts
-import { renderToHtml } from 'f1anderz/msg-parser';
+import { renderToHtml } from '@f1anderz/msg-parser';
 const html = renderToHtml(msg, { locale: 'uk-UA', blockRemoteImages: true });
 ```
 
