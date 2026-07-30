@@ -1,6 +1,6 @@
 import { parseMsg } from '../message/index.js';
 import type { MsgAttachment, MsgMessage, RenderOptions } from '../types.js';
-import { blockRemoteImages as blockRemote, sanitizeHtml } from './sanitize.js';
+import { sanitizeBody } from './sanitize.js';
 import { PREVIEW_CSS } from './styles.js';
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -52,7 +52,9 @@ function dataUri(att: MsgAttachment): string {
 
 function buildBody(msg: MsgMessage, options: RenderOptions): string {
   if (msg.bodyHtml) {
-    let html = sanitizeHtml(msg.bodyHtml);
+    let html = sanitizeBody(msg.bodyHtml, {
+      blockRemoteImages: options.blockRemoteImages === true,
+    });
     if (options.inlineImages !== false) {
       for (const a of msg.attachments) {
         if (a.contentId && a.data) {
@@ -61,7 +63,6 @@ function buildBody(msg: MsgMessage, options: RenderOptions): string {
         }
       }
     }
-    if (options.blockRemoteImages) html = blockRemote(html);
     return '<div class="msgp-body">' + html + '</div>';
   }
   if (msg.bodyText) {

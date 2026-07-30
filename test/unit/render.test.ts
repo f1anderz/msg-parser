@@ -192,3 +192,41 @@ describe('renderMsgFile', () => {
     expect(html).toContain('From file');
   });
 });
+
+describe('blockRemoteImages', () => {
+  const remote = {
+    'img src': '<img src="http://e.com/t.gif">',
+    'protocol-relative src': '<img src="//e.com/t.gif">',
+    srcset: '<img srcset="https://e.com/a.png 1x">',
+    background: '<td background="https://e.com/b.png">x</td>',
+    'css background-image': '<div style="background-image:url(https://e.com/x.png)">x</div>',
+  };
+
+  for (const [label, html] of Object.entries(remote)) {
+    it(`neutralizes remote ${label}`, () => {
+      const out = renderToHtml(msg({ bodyHtml: html }), { blockRemoteImages: true });
+      expect(out).not.toContain('e.com/');
+      expect(out).toContain('blocked:');
+    });
+  }
+
+  it('leaves remote sources alone when the option is off', () => {
+    const out = renderToHtml(msg({ bodyHtml: remote['img src'] }));
+    expect(out).toContain('http://e.com/t.gif');
+  });
+
+  it('keeps data: and cid: URIs when blocking remote images', () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const out = renderToHtml(
+      msg({
+        bodyHtml: '<img src="cid:img1">',
+        attachments: [
+          { name: 'i.png', mime: 'image/png', contentId: 'img1', hidden: true, data: png },
+        ],
+      }),
+      { blockRemoteImages: true },
+    );
+    expect(out).toContain('data:image/png;base64,');
+    expect(out).not.toContain('blocked:');
+  });
+});

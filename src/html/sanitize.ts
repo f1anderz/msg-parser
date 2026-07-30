@@ -36,7 +36,7 @@ const TABLE_ATTRS = [
 const IMG_ATTRS = ['srcset', 'border', 'hspace', 'vspace'];
 const REMOTE_ATTRS = new Set(['src', 'srcset', 'background', 'poster']);
 const REMOTE_URL = /^\s*(?:https?:)?\/\//i;
-const REMOTE_CSS_URL = /url\(\s*['"]?\s*(?:https?:)?\/\//gi;
+const REMOTE_CSS_URL = /url\(\s*['"]?\s*(?:https?:)?\/\/[^'")\s]*/gi;
 const CID_URI = /^cid:/i;
 
 const uniq = (a: string[]): string[] => [...new Set(a)];
@@ -83,13 +83,19 @@ const BASE: IFilterXSSOptions = {
 };
 
 const permissive = new Filter({ ...BASE, safeAttrValue: makeSafeAttrValue(false) });
+const blocking = new Filter({ ...BASE, safeAttrValue: makeSafeAttrValue(true) });
 
 /** Defense-in-depth HTML sanitization. The primary boundary is the consumer's sandboxed iframe. */
 export function sanitizeHtml(html: string): string {
   return permissive.process(html);
 }
 
-/** Neutralize external http(s) image sources (used when blockRemoteImages is set). */
-export function blockRemoteImages(html: string): string {
-  return html.replace(/(<img\b[^>]*\ssrc\s*=\s*["']?)\s*https?:\/\/[^"'\s>]*/gi, '$1blocked:');
+/**
+ * Sanitize a message body. With `blockRemoteImages`, http(s) and protocol-relative
+ * URLs in `src`/`srcset`/`background`/`poster` and in CSS `url(...)` are neutralized.
+ * Stylesheet contents inside `<style>` blocks are not reached — cssfilter only
+ * processes inline declaration lists.
+ */
+export function sanitizeBody(html: string, opts: { blockRemoteImages: boolean }): string {
+  return (opts.blockRemoteImages ? blocking : permissive).process(html);
 }
