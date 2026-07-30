@@ -613,55 +613,194 @@ git commit -m "docs: document the xss sanitizer, sanitize option and RN boundary
 
 ## Task 5: Rendering-fidelity sweep over the local fixture corpus
 
-The 1016 samples in `test/fixtures/msg-samples/` are real mail — both the fixtures and
+The 1000 samples in `test/fixtures/msg-samples/` are real mail — both the fixtures and
 `test/snapshot/__snapshots__/message.test.ts.snap` are gitignored, and CI excludes the snapshot
 suite. This task is a **local review gate that commits no test artifacts**; only allowlist fixes
-get committed. Vitest's existing snapshots are the before/after diff.
+get committed.
+
+**Do not use vitest snapshots as the before/after diff.** The existing baseline is a 498 MB file —
+inline images are embedded as base64 `data:` URIs, so a snapshot diff is dominated by megabytes of
+unreadable payload and cannot be reviewed by anyone. Instead, compare the two renderings
+**structurally**, ignoring base64 payloads, and aggregate the differences by category across the
+whole corpus.
 
 **Files:**
 
 - Possibly modify: `src/html/sanitize.ts` (allowlist tuning only)
+- Possibly modify: `test/unit/render.test.ts` (regression tests for allowlist fixes)
+- Scratch only, never committed: everything under `.superpowers/sdd/2026-07-30-xss-sanitizer/`
 
-- [ ] **Step 1: Confirm a usable baseline exists**
+- [ ] **Step 1: Build the base (pre-change) renderer alongside the new one**
 
-```bash
-ls test/fixtures/msg-samples | wc -l && ls -la test/snapshot/__snapshots__/
-```
-
-Expected: a non-zero fixture count and an existing `message.test.ts.snap`. If the snapshot file is
-missing, the baseline is gone — regenerate it from `main` before continuing:
+`WS` is `.superpowers/sdd/2026-07-30-xss-sanitizer` (git-ignored scratch). `0b3d0c7` is this
+branch's base commit.
 
 ```bash
-git stash && npx vitest run test/snapshot -u && git stash pop
+WS="$PWD/.superpowers/sdd/2026-07-30-xss-sanitizer"
+git worktree add "$WS/base" 0b3d0c7
+ln -s "$PWD/node_modules" "$WS/base/node_modules"
+(cd "$WS/base" && npx tsup) && npm run build
 ```
 
-- [ ] **Step 2: Diff the new rendering against the baseline**
+Expected: `$WS/base/dist/index.mjs` (base renderer) and `dist/index.mjs` (new renderer) both exist.
+The base commit predates the `xss` dependency, so sharing `node_modules` is safe — it only needs
+`tsup` and `typescript`.
+
+- [ ] **Step 2: Write the structural comparison script**
+
+Write this to `$WS/fidelity.mjs` verbatim:
+
+```js
+const [, , baseDist, newDist, fixturesDir, outFile] = process.argv;
+const { readdirSync, readFileSync, writeFileSync } = await import('node:fs');
+const { join } = await import('node:path');
+const { renderToHtml: renderBase } = await import(baseDist);
+const { renderToHtml: renderNew } = await import(newDist);
+
+const DATA_URI = /data:[a-z0-9/.+-]*;base64,[A-Za-z0-9+/=]+/gi;
+const strip = (h) => h.replace(DATA_URI, 'data:B64');
+
+const counts = (h, re) => {
+  const m = new Map();
+  for (const x of h.matchAll(re)) {
+    const k = x[1].toLowerCase();
+    m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return m;
+};
+const tags = (h) => counts(h, /<([a-z][a-z0-9:-]*)/gi);
+const attrs = (h) => counts(h, /\s([a-z][a-z0-9:-]*)\s*=/gi);
+const visibleText = (h) =>
+  h
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&[a-z#0-9]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const lost = (base, next) => {
+  const out = new Map();
+  for (const [k, n] of base) {
+    const d = n - (next.get(k) ?? 0);
+    if (d > 0) out.set(k, d);
+  }
+  return out;
+};
+
+const bump = (agg, key, dropped) => {
+  const e = agg.get(key) ?? { fixtures: 0, dropped: 0 };
+  e.fixtures += 1;
+  e.dropped += dropped;
+  agg.set(key, e);
+};
+
+const files = readdirSync(fixturesDir).filter((f) => f.toLowerCase().endsWith('.msg'));
+const lostTags = new Map();
+const lostAttrs = new Map();
+const textLoss = [];
+const errors = [];
+
+for (const f of files) {
+  const bytes = new Uint8Array(readFileSync(join(fixturesDir, f)));
+  let a, b;
+  try {
+    a = strip(renderBase(bytes));
+  } catch (e) {
+    errors.push(`${f}: BASE threw ${e.message}`);
+    continue;
+  }
+  try {
+    b = strip(renderNew(bytes));
+  } catch (e) {
+    errors.push(`${f}: NEW threw ${e.message}`);
+    continue;
+  }
+  for (const [k, d] of lost(tags(a), tags(b))) bump(lostTags, k, d);
+  for (const [k, d] of lost(attrs(a), attrs(b))) bump(lostAttrs, k, d);
+  const ta = visibleText(a).length;
+  const tb = visibleText(b).length;
+  if (ta - tb > 20 && (ta - tb) / Math.max(ta, 1) > 0.02) {
+    textLoss.push({ f, base: ta, next: tb, delta: ta - tb });
+  }
+}
+
+const table = (agg) =>
+  [...agg.entries()]
+    .sort((x, y) => y[1].fixtures - x[1].fixtures)
+    .map(
+      ([k, v]) => `  ${k.padEnd(22)} fixtures=${String(v.fixtures).padEnd(6)} dropped=${v.dropped}`,
+    )
+    .join('\n');
+
+const report = [
+  `fixtures compared: ${files.length}   render errors: ${errors.length}`,
+  ``,
+  `## TAGS present in BASE output but missing//reduced in NEW output`,
+  table(lostTags) || '  (none)',
+  ``,
+  `## ATTRIBUTES present in BASE output but missing/reduced in NEW output`,
+  table(lostAttrs) || '  (none)',
+  ``,
+  `## FIXTURES losing visible text (>20 chars and >2%)  count=${textLoss.length}`,
+  textLoss
+    .sort((x, y) => y.delta - x.delta)
+    .slice(0, 40)
+    .map((t) => `  ${t.f}  base=${t.base} new=${t.next} lost=${t.delta}`)
+    .join('\n') || '  (none)',
+  ``,
+  `## RENDER ERRORS`,
+  errors.slice(0, 40).join('\n') || '  (none)',
+].join('\n');
+
+writeFileSync(outFile, report);
+console.log(report);
+```
+
+- [ ] **Step 3: Run the comparison**
 
 ```bash
-npx vitest run test/snapshot > /tmp/fidelity.txt 2>&1; tail -40 /tmp/fidelity.txt
+WS="$PWD/.superpowers/sdd/2026-07-30-xss-sanitizer"
+node "$WS/fidelity.mjs" "$WS/base/dist/index.mjs" "$PWD/dist/index.mjs" \
+  "$PWD/test/fixtures/msg-samples" "$WS/fidelity.txt"
 ```
 
-Expected: FAIL with snapshot mismatches. The `parses <file>` tests must all still pass — parsing is
-untouched, so any failure there is a real bug. Only `renders <file>` tests should differ.
+Expected: a report of at most a few hundred lines. `render errors` must be **0** — parsing is
+untouched by this branch, so any thrown error is a real bug, not a fidelity question. Report it
+immediately rather than tuning the allowlist around it.
 
-- [ ] **Step 3: Review the diffs as fidelity regressions**
+- [ ] **Step 4: Review the report as fidelity regressions**
 
-Read through `/tmp/fidelity.txt`. Classify every kind of change:
+Classify every kind of change:
 
-**Expected and acceptable** — non-allowlisted tags removed (`<iframe>`, `<form>`, `<o:p>`,
-`<v:shape>`), comments and MSO conditional blocks gone, `<html>`/`<head>`/`<body>` wrappers
-stripped, `<title>` text removed, inline `style` values normalized by cssfilter (trailing `;`,
-whitespace), attribute quoting normalized.
+Read the aggregate tables, not individual fixtures. An entry appearing in hundreds of fixtures is a
+systematic allowlist gap; one appearing in a single fixture is usually that message being unusual.
 
-**Regressions to fix** — visible text disappearing, tables collapsing, `class`/`bgcolor`/`width`
-attributes dropped, `<style>` blocks vanishing, `cid:` references lost, CSS properties stripped
-that email needs.
+**Expected and acceptable** — non-allowlisted tags gone (`iframe`, `form`, `svg`, `o:p`, `v:shape`,
+`xml`, `html`, `head`, `title`, `meta`, `link`, `base`); `<title>` text removed; inline `style`
+values normalized by cssfilter (trailing `;`, whitespace); attribute quoting normalized. Note
+`body` IS allowlisted, so it should NOT appear in the lost-tags table — if it does, investigate.
+
+**Regressions to fix** — visible text disappearing (the `FIXTURES losing visible text` section is
+the highest-signal part of the report); `table`/`tr`/`td` counts dropping; `class`, `bgcolor`,
+`width`, `height`, `valign`, `colspan`, `rowspan` or other layout attributes dropped in bulk;
+`style` attributes dropped; `style` tags vanishing; `src` counts dropping (would mean `cid:`
+references were lost).
 
 For each regression, add the missing tag or attribute to `GLOBAL_ATTRS`, `TABLE_ATTRS`, `IMG_ATTRS`,
-or the allowlist in `buildWhiteList()` in `src/html/sanitize.ts`, then re-run Step 2. Repeat until
-every remaining diff is in the acceptable list.
+or the allowlist in `buildWhiteList()` in `src/html/sanitize.ts`. Then rebuild and re-run:
 
-- [ ] **Step 4: Add a regression test for each allowlist fix**
+```bash
+npm run build && node "$WS/fidelity.mjs" "$WS/base/dist/index.mjs" "$PWD/dist/index.mjs" \
+  "$PWD/test/fixtures/msg-samples" "$WS/fidelity.txt"
+```
+
+Repeat until every remaining entry is in the acceptable list. Do **not** widen the allowlist to
+silence a single-fixture oddity, and do not add a tag back that the security rubric excludes
+(`script`, `iframe`, `form`, `object`, `embed`, `svg`, `math`, `base`, `link`, `meta`) — those
+exclusions are the point of the change. If the corpus says one of those is needed for fidelity,
+stop and report it rather than allowlisting it.
+
+- [ ] **Step 5: Add a regression test for each allowlist fix**
 
 For every attribute or tag added in Step 3, add an assertion to the
 `preserves the table markup and inline styles real email depends on` test in
@@ -674,25 +813,32 @@ expect(out).toContain('valign="top"');
 
 with the corresponding attribute added to the test's input HTML.
 
-- [ ] **Step 5: Accept the reviewed snapshots**
+- [ ] **Step 6: Tear down the base worktree**
 
 ```bash
-npx vitest run test/snapshot -u
+WS="$PWD/.superpowers/sdd/2026-07-30-xss-sanitizer"
+rm -f "$WS/base/node_modules"
+git worktree remove --force "$WS/base"
+git worktree list
 ```
 
-The regenerated `.snap` is gitignored — nothing to commit from this step.
+Expected: only the primary worktree remains. Removing the `node_modules` symlink first matters —
+`git worktree remove` would otherwise walk into the shared directory.
 
-- [ ] **Step 6: Run the full gate**
+- [ ] **Step 7: Run the full gate**
 
 ```bash
-npm run typecheck && npm run lint && npm run test
+npm run typecheck && npm run lint && npm run format:check && npx vitest run test/unit
 ```
 
-Expected: all pass.
+Expected: all pass. Use `npx vitest run test/unit`, not `npm run test` — the latter includes the
+snapshot suite, whose 498 MB stale baseline will report ~1000 mismatches that are expected and
+meaningless here. Do NOT run `vitest -u` to "fix" them and do NOT delete the snapshot file; leaving
+the stale baseline in place is deliberate, and it is gitignored either way.
 
-- [ ] **Step 7: Commit any allowlist fixes**
+- [ ] **Step 8: Commit any allowlist fixes**
 
-Only if Step 3 or Step 4 changed files:
+Only if Step 4 or Step 5 changed files:
 
 ```bash
 git add src/html/sanitize.ts test/unit/render.test.ts
