@@ -47,13 +47,21 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # package.json's publishConfig.registry points at GitHub Packages, so the
-      # --registry flag here overrides it for a second publish to public npm.
+      # The first setup-node call wrote an @f1anderz:registry mapping to GitHub
+      # Packages in .npmrc — that scoped mapping beats a plain --registry flag
+      # on the command line, so it must be repointed at npmjs.org here or the
+      # publish below silently targets GitHub Packages again and 401s.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@f1anderz'
+
       # Auth is via OIDC trusted publishing (id-token permission above) — no
       # NPM_TOKEN secret. Requires the trusted publisher to be configured on
       # npmjs.com for this repo + workflow file first (see setup notes).
       - name: Publish to npm
-        run: npm publish --registry=https://registry.npmjs.org/ --access public --provenance
+        run: npm publish --access public --provenance
 
 
       # `npm pack` honors package.json "files": ["dist"], so the tarball contains
