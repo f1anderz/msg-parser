@@ -57,12 +57,13 @@ describe('sanitizeHtml', () => {
   });
 
   it('neutralizes dangerous CSS in inline style attributes', () => {
-    expect(
-      sanitizeHtml('<div style="background-image:url(javascript:evil())">x</div>'),
-    ).not.toContain('javascript:');
-    expect(sanitizeHtml('<div style="width:expression(alert(1))">x</div>')).not.toContain(
-      'expression',
-    );
+    const out1 = sanitizeHtml('<div style="background-image:url(javascript:evil())">x</div>');
+    expect(out1).not.toContain('javascript:');
+    expect(out1).toContain('>x<');
+
+    const out2 = sanitizeHtml('<div style="width:expression(alert(1))">x</div>');
+    expect(out2).not.toContain('expression');
+    expect(out2).toContain('>x<');
   });
 
   it('escapes the noscript title mXSS payload instead of reviving it', () => {
@@ -113,6 +114,70 @@ describe('sanitizeHtml', () => {
     expect(sanitizeHtml('<style>.b{font-weight:bold}</style><p class="b">x</p>')).toContain(
       '<style>.b{font-weight:bold}</style>',
     );
+  });
+
+  describe('<style> block handling', () => {
+    it('preserves the contents of a comment-wrapped stylesheet (Outlook canonical export)', () => {
+      const out = sanitizeHtml(
+        '<style><!-- p.MsoNormal{margin:0in} --></style><p class="MsoNormal">x</p>',
+      );
+      expect(out).toContain('p.MsoNormal{margin:0in}');
+      expect(out).toContain('class="MsoNormal"');
+    });
+
+    it('does not escape > in a child-combinator selector', () => {
+      const out = sanitizeHtml('<style>td > p{color:red}</style>');
+      expect(out).toContain('td > p');
+      expect(out).not.toContain('td &gt; p');
+    });
+
+    it('emits balanced <style>/</style> even when the input tries to desync via a comment', () => {
+      const out = sanitizeHtml('<style>a{}<!--</style>--><p>rest</p>');
+      const opens = out.match(/<style/gi) ?? [];
+      const closes = out.match(/<\/style/gi) ?? [];
+      expect(opens.length).toBe(closes.length);
+      expect(out).toContain('rest');
+    });
+
+    it('does not let a desynced <style> suppress the attachment list', () => {
+      const out = renderToHtml(
+        msg({
+          bodyHtml: '<style>a{}<!--</style>--><p>rest</p>',
+          attachments: [
+            {
+              name: 'important.pdf',
+              mime: 'application/pdf',
+              contentId: null,
+              hidden: false,
+              data: new Uint8Array(10),
+            },
+          ],
+        }),
+      );
+      expect(out).toContain('important.pdf');
+    });
+
+    it('drops a <style> block whose captured contents contain a literal </style rather than reinserting it', () => {
+      // The first `</style ... >` that is syntactically a real closing tag terminates the
+      // capture; a fake one earlier (invalid tag name, so not matched as the closer)
+      // leaves the literal "</style" substring inside the captured contents, which must
+      // be dropped rather than spliced back in.
+      const out = sanitizeHtml('<style>a{}</stylefoo>b{}</style><p>after</p>');
+      expect(out).not.toContain('<style');
+      expect(out).not.toContain('stylefoo');
+      expect(out).toContain('<p>after</p>');
+    });
+
+    it('preserves a safe media attribute but never carries over other attributes', () => {
+      const withMedia = sanitizeHtml('<style media="print">.a{color:red}</style>');
+      expect(withMedia).toContain('<style media="print">');
+      expect(withMedia).toContain('.a{color:red}');
+
+      const withOnload = sanitizeHtml('<style onload="evil()">.a{color:red}</style>');
+      expect(withOnload).not.toContain('onload');
+      expect(withOnload).not.toContain('evil()');
+      expect(withOnload).toContain('.a{color:red}');
+    });
   });
 
   it('strips Outlook namespace tags and MSO conditional comments without leaking text', () => {
@@ -222,8 +287,11 @@ describe('blockRemoteImages', () => {
     'img src': '<img src="http://e.com/t.gif">',
     'protocol-relative src': '<img src="//e.com/t.gif">',
     srcset: '<img srcset="https://e.com/a.png 1x">',
+    'srcset with a later remote candidate': '<img srcset="./a.png 1x, https://e.com/b.png 2x">',
     background: '<td background="https://e.com/b.png">x</td>',
     'css background-image': '<div style="background-image:url(https://e.com/x.png)">x</div>',
+    'css background-image, double-quoted url()':
+      '<div style="background-image:url(&quot;//e.com/x.png&quot;)">x</div>',
   };
 
   for (const [label, html] of Object.entries(remote)) {
@@ -233,6 +301,20 @@ describe('blockRemoteImages', () => {
       expect(out).toContain('blocked:');
     });
   }
+
+  it('blocks a srcset whose first candidate is relative but a later one is remote', () => {
+    const out = renderToHtml(msg({ bodyHtml: remote['srcset with a later remote candidate'] }), {
+      blockRemoteImages: true,
+    });
+    expect(out).not.toContain('e.com/');
+  });
+
+  it('blocks every url() form (bare, single-quoted, double-quoted) in one declaration', () => {
+    const html =
+      '<div style="background:url(//e.com/a.png), url(\'//e.com/b.png\'), url(&quot;//e.com/c.png&quot;)">x</div>';
+    const out = renderToHtml(msg({ bodyHtml: html }), { blockRemoteImages: true });
+    expect(out).not.toContain('e.com/');
+  });
 
   it('leaves remote sources alone when the option is off', () => {
     const out = renderToHtml(msg({ bodyHtml: remote['img src'] }));
