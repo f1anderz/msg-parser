@@ -51,6 +51,25 @@ Verified against xss 1.0.15's `lib/default.js` and by prototype:
   visible `&lt;o:p&gt;` text.
 - HTML comments, including MSO conditional comments (`<!--[if gte mso 9]>`), are removed entirely.
 
+## Two constraints found while prototyping
+
+**`cid:` must be preserved explicitly.** xss's default `safeAttrValue` allowlists `http(s)`,
+`mailto:`, `tel:`, `data:image/`, `ftp://`, `./`, `../`, `#` and `/` for `href`/`src` — but not
+`cid:`. Since `renderToHtml` substitutes `cid:` references *after* sanitizing, the default would
+silently break every inline image. The custom `safeAttrValue` therefore short-circuits `src`
+values starting with `cid:`, passing them through `friendlyAttrValue`/`escapeAttrValue` only.
+`data:image/` is allowed by default, so the generated data URIs survive.
+
+Sanitize-before-substitution is kept deliberately: it preserves the existing `buildBody` order and
+keeps megabytes of base64 out of the parser, which matters on mobile.
+
+**`xss` must be consumed via its default export.** It is CommonJS and attaches most exports in a
+dynamic `for..in` loop, so Node's CJS lexer cannot expose them as ESM named imports —
+`import { getDefaultWhiteList } from 'xss'` throws `SyntaxError: Named export not found` at
+runtime. Only `FilterXSS` and `filterXSS` are statically detectable. The default export is the
+whole module object at runtime, though its published type is narrowed to `filterXSS`, so it needs
+one documented cast. Type-only named imports are safe because types are erased.
+
 ## The actual work: an email-tuned allowlist
 
 xss's default allowlist targets user comments, not email. Out of the box it permits **no `style`
@@ -142,7 +161,8 @@ against the real library:
   inline `style` declarations, `<style>` blocks, and `<o:p>` stripped without leaking text.
 - The existing benign-URL test (`href="http://example.com/onclick=1"` must survive) is kept.
 - `blockRemoteImages`: remote `src`, `srcset`, `background`, `poster`, and inline
-  `background-image` are neutralized; `data:` and `cid:` URIs are not.
+  `background-image` are neutralized, including protocol-relative `//host` URLs; `data:` and `cid:`
+  URIs are not.
 - `options.sanitize` is called and its output used verbatim.
 
 **Rendering-fidelity check.** The `test/fixtures/msg-samples/` corpus is the safety net. Render
