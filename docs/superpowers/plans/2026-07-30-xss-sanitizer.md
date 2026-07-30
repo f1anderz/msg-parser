@@ -47,7 +47,7 @@ Adds the dependency and rewrites `sanitizeHtml`. The old `blockRemoteImages` reg
 
 **Interfaces:**
 - Produces: `sanitizeHtml(html: string): string` — unchanged signature, xss-backed.
-- Produces (internal, used by Task 2): `makeSafeAttrValue(blockRemote: boolean): SafeAttrValueHandler`, `buildWhiteList(): IWhiteList`, and the `BASE` options object.
+- Produces (internal, used by Task 2): `makeSafeAttrValue(blockRemote: boolean): SafeAttrValueHandler`, `buildWhiteList(): IWhiteList`, the `BASE` options object, and the `permissive` filter instance. Task 1 does **not** declare a `blocking` instance — it would be an unused variable until Task 2 adds its consumer, and `npm run lint` fails on unused variables.
 
 - [ ] **Step 1: Install the dependency**
 
@@ -99,8 +99,11 @@ describe('sanitizeHtml', () => {
 
   it('escapes the noscript title mXSS payload instead of reviving it', () => {
     const out = sanitizeHtml('<noscript><p title="</noscript><img src=x onerror=alert(1)>">');
-    expect(out).not.toContain('onerror');
+    // The payload survives as escaped *text* inside the title value — that is the
+    // correct outcome. What matters is that it is never revived as markup, so assert
+    // on the escaping rather than on the absence of the substring.
     expect(out).not.toContain('<img');
+    expect(out).toContain('&lt;img');
   });
 
   it('preserves the table markup and inline styles real email depends on', () => {
@@ -230,7 +233,6 @@ const BASE: IFilterXSSOptions = {
 };
 
 const permissive = new Filter({ ...BASE, safeAttrValue: makeSafeAttrValue(false) });
-const blocking = new Filter({ ...BASE, safeAttrValue: makeSafeAttrValue(true) });
 
 /** Defense-in-depth HTML sanitization. The primary boundary is the consumer's sandboxed iframe. */
 export function sanitizeHtml(html: string): string {
@@ -273,7 +275,7 @@ git commit -m "feat: sanitize message HTML with xss instead of hand-written rege
 - Test: `test/unit/render.test.ts` (new describe block)
 
 **Interfaces:**
-- Consumes: `makeSafeAttrValue`, `BASE`, `permissive`, `blocking` from Task 1.
+- Consumes: `makeSafeAttrValue`, `BASE`, `permissive` from Task 1. The `blocking` instance does not exist yet — this task creates it.
 - Produces: `sanitizeBody(html: string, opts: { blockRemoteImages: boolean }): string`, exported from `src/html/sanitize.ts` but **not** re-exported from `src/html/index.ts`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -327,7 +329,14 @@ Expected: FAIL. The current regex only rewrites `<img src>` with an explicit `ht
 
 - [ ] **Step 3: Add `sanitizeBody` and delete the regex helper**
 
-In `src/html/sanitize.ts`, append after `sanitizeHtml`:
+In `src/html/sanitize.ts`, add the blocking filter instance directly below the existing
+`const permissive = ...` line:
+
+```ts
+const blocking = new Filter({ ...BASE, safeAttrValue: makeSafeAttrValue(true) });
+```
+
+Then append after `sanitizeHtml`:
 
 ```ts
 /**
