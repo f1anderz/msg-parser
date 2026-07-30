@@ -34,6 +34,15 @@ const TABLE_ATTRS = [
   'nowrap',
 ];
 const IMG_ATTRS = ['srcset', 'border', 'hspace', 'vspace'];
+// `<hr>`'s legacy `width`/`size` change its rendered thickness/length; `<ol>`'s
+// `start`/`type` and `<ul>`'s `type` change visible numbering/bullet style; `<br
+// clear>` affects text-wrap around floated layout elements. All four are common
+// in real-world email HTML and were confirmed dropped from surviving (not merely
+// comment-wrapped) elements by the corpus fidelity sweep.
+const HR_ATTRS = ['width', 'size'];
+const OL_ATTRS = ['start', 'type'];
+const UL_ATTRS = ['type'];
+const BR_ATTRS = ['clear'];
 const REMOTE_ATTRS = new Set(['src', 'srcset', 'background', 'poster']);
 const REMOTE_URL = /^\s*(?:https?:)?\/\//i;
 const REMOTE_CSS_URL = /url\(\s*['"]?\s*(?:https?:)?\/\/[^'")\s]*/gi;
@@ -50,8 +59,14 @@ function buildWhiteList(): IWhiteList {
   for (const tag of Object.keys(wl)) wl[tag] = uniq([...(wl[tag] ?? []), ...GLOBAL_ATTRS]);
   for (const tag of TABLE_TAGS) wl[tag] = uniq([...(wl[tag] ?? []), ...TABLE_ATTRS]);
   wl.img = uniq([...(wl.img ?? []), ...IMG_ATTRS]);
+  wl.hr = uniq([...(wl.hr ?? []), ...HR_ATTRS]);
+  wl.ol = uniq([...(wl.ol ?? []), ...OL_ATTRS]);
+  wl.ul = uniq([...(wl.ul ?? []), ...UL_ATTRS]);
+  wl.br = uniq([...(wl.br ?? []), ...BR_ATTRS]);
   wl.style = [];
-  wl.body = uniq([...GLOBAL_ATTRS, 'bgcolor']);
+  // `link`/`vlink` set the default and visited-link colors for the whole message;
+  // confirmed dropped from a surviving `<body>` by the corpus fidelity sweep.
+  wl.body = uniq([...GLOBAL_ATTRS, 'bgcolor', 'link', 'vlink']);
   return wl;
 }
 

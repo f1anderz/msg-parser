@@ -87,6 +87,28 @@ describe('sanitizeHtml', () => {
     expect(out).toContain('class="b"');
   });
 
+  // Found by the 1000-fixture corpus fidelity sweep (task 5): these attributes were
+  // dropped from tags that otherwise survived sanitization, changing visible layout
+  // (hr thickness/length, list numbering/bullet style, br line-wrap, body link color).
+  it('preserves layout attributes the fidelity sweep found were dropped from surviving tags', () => {
+    const html =
+      '<body link="blue" vlink="purple">' +
+      '<hr width="50%" size="3">' +
+      '<ol start="5" type="a"><li>x</li></ol>' +
+      '<ul type="square"><li>y</li></ul>' +
+      '<br clear="all">' +
+      '</body>';
+    const out = sanitizeHtml(html);
+    expect(out).toContain('link="blue"');
+    expect(out).toContain('vlink="purple"');
+    expect(out).toContain('width="50%"');
+    expect(out).toContain('size="3"');
+    expect(out).toContain('start="5"');
+    expect(out).toContain('type="a"');
+    expect(out).toContain('type="square"');
+    expect(out).toContain('clear="all"');
+  });
+
   it('keeps <style> blocks, which Outlook uses for message CSS', () => {
     expect(sanitizeHtml('<style>.b{font-weight:bold}</style><p class="b">x</p>')).toContain(
       '<style>.b{font-weight:bold}</style>',
