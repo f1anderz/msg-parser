@@ -230,3 +230,42 @@ describe('blockRemoteImages', () => {
     expect(out).not.toContain('blocked:');
   });
 });
+
+describe('options.sanitize', () => {
+  it('replaces the built-in sanitizer and uses its output verbatim', () => {
+    const out = renderToHtml(msg({ bodyHtml: '<p>Body</p>' }), {
+      sanitize: () => '<em>replaced</em>',
+    });
+    expect(out).toContain('<em>replaced</em>');
+    expect(out).not.toContain('<p>Body</p>');
+  });
+
+  it('receives the raw body HTML before cid: substitution', () => {
+    const seen: string[] = [];
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    renderToHtml(
+      msg({
+        bodyHtml: '<img src="cid:img1">',
+        attachments: [
+          { name: 'i.png', mime: 'image/png', contentId: 'img1', hidden: true, data: png },
+        ],
+      }),
+      {
+        sanitize: (html) => {
+          seen.push(html);
+          return html;
+        },
+      },
+    );
+    expect(seen).toEqual(['<img src="cid:img1">']);
+  });
+
+  it('takes over remote-image blocking too', () => {
+    const out = renderToHtml(msg({ bodyHtml: '<img src="http://e.com/t.gif">' }), {
+      blockRemoteImages: true,
+      sanitize: (html) => html,
+    });
+    expect(out).toContain('http://e.com/t.gif');
+    expect(out).not.toContain('blocked:');
+  });
+});

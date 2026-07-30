@@ -52,9 +52,9 @@ function dataUri(att: MsgAttachment): string {
 
 function buildBody(msg: MsgMessage, options: RenderOptions): string {
   if (msg.bodyHtml) {
-    let html = sanitizeBody(msg.bodyHtml, {
-      blockRemoteImages: options.blockRemoteImages === true,
-    });
+    let html = options.sanitize
+      ? options.sanitize(msg.bodyHtml)
+      : sanitizeBody(msg.bodyHtml, { blockRemoteImages: options.blockRemoteImages === true });
     if (options.inlineImages !== false) {
       for (const a of msg.attachments) {
         if (a.contentId && a.data) {

@@ -36,6 +36,12 @@ export interface RenderOptions {
   inlineImages?: boolean;
   /** Neutralize external http(s) image sources. Default false. */
   blockRemoteImages?: boolean;
+  /**
+   * Replace the built-in sanitizer. Receives the raw body HTML before `cid:`
+   * substitution. Fully overrides sanitization, `blockRemoteImages` included —
+   * a custom sanitizer owns its own allowlist and remote-resource policy.
+   */
+  sanitize?: (html: string) => string;
   /** Return only the inner HTML fragment, not a full document. Default false. */
   fragment?: boolean;
 }
