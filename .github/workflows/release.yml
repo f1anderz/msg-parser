@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write # create the GitHub Release and upload the tarball
   packages: write # publish the package to GitHub Packages
+  id-token: write # OIDC token for npm trusted publishing (no NPM_TOKEN needed)
 
 jobs:
   release:
@@ -23,6 +24,11 @@ jobs:
           node-version: '22'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@f1anderz'
+
+      # Trusted publishing (OIDC) to npmjs.org needs npm >= 11.5.1; setup-node's
+      # bundled npm on node 22 is older, so bump it before installing deps.
+      - name: Update npm for trusted publishing support
+        run: npm install -g npm@latest
 
       # No committed lockfile in this repo, so use `npm install` (not `npm ci`).
       - name: Install dev dependencies
@@ -40,6 +46,15 @@ jobs:
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # package.json's publishConfig.registry points at GitHub Packages, so the
+      # --registry flag here overrides it for a second publish to public npm.
+      # Auth is via OIDC trusted publishing (id-token permission above) — no
+      # NPM_TOKEN secret. Requires the trusted publisher to be configured on
+      # npmjs.com for this repo + workflow file first (see setup notes).
+      - name: Publish to npm
+        run: npm publish --registry=https://registry.npmjs.org/ --access public --provenance
+
 
       # `npm pack` honors package.json "files": ["dist"], so the tarball contains
       # only the minified dist + .d.ts types + README + LICENSE — never src/ or sourcemaps.
