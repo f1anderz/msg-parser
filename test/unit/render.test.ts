@@ -57,9 +57,9 @@ describe('sanitizeHtml', () => {
   });
 
   it('neutralizes dangerous CSS in inline style attributes', () => {
-    expect(sanitizeHtml('<div style="background-image:url(javascript:evil())">x</div>')).not.toContain(
-      'javascript:',
-    );
+    expect(
+      sanitizeHtml('<div style="background-image:url(javascript:evil())">x</div>'),
+    ).not.toContain('javascript:');
     expect(sanitizeHtml('<div style="width:expression(alert(1))">x</div>')).not.toContain(
       'expression',
     );
@@ -95,7 +95,9 @@ describe('sanitizeHtml', () => {
 
   it('strips Outlook namespace tags and MSO conditional comments without leaking text', () => {
     expect(sanitizeHtml('<p>a<o:p></o:p>b</p>')).toBe('<p>ab</p>');
-    expect(sanitizeHtml('<!--[if gte mso 9]><xml>junk</xml><![endif]--><p>hi</p>')).toBe('<p>hi</p>');
+    expect(sanitizeHtml('<!--[if gte mso 9]><xml>junk</xml><![endif]--><p>hi</p>')).toBe(
+      '<p>hi</p>',
+    );
     expect(sanitizeHtml('<head><title>Msg</title></head><p>hi</p>')).not.toContain('Msg');
   });
 

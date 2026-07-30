@@ -117,5 +117,3 @@ vitest 4.1.10
 ## License
 
 MIT
-
-# msg-parser

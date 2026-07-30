@@ -15,7 +15,7 @@
 - **No DOM.** The library must run in browser, Node, and React Native. Never import `jsdom`, `linkedom`, DOMPurify, or reference `window`/`document`.
 - **`xss` must be imported via its default export**, not named imports. `xss` is CommonJS and attaches most exports in a dynamic `for..in` loop, so Node's CJS lexer cannot see them: `import { getDefaultWhiteList } from 'xss'` throws `SyntaxError: Named export 'getDefaultWhiteList' not found` at runtime. Only `FilterXSS` and `filterXSS` are statically detectable. Type-only named imports (`import type { ... } from 'xss'`) are safe because types are erased.
 - **`sanitizeHtml(html: string) => string`** stays exported from `src/html/index.js` with an unchanged signature.
-- **`cid:` URIs in `src` must survive sanitization.** xss's default `href`/`src` scheme allowlist permits `http(s)`, `mailto:`, `tel:`, `data:image/`, `ftp://`, `./`, `../`, `#`, `/` — but **not** `cid:`. `renderToHtml` substitutes `cid:` references *after* sanitizing, so dropping them silently breaks all inline images.
+- **`cid:` URIs in `src` must survive sanitization.** xss's default `href`/`src` scheme allowlist permits `http(s)`, `mailto:`, `tel:`, `data:image/`, `ftp://`, `./`, `../`, `#`, `/` — but **not** `cid:`. `renderToHtml` substitutes `cid:` references _after_ sanitizing, so dropping them silently breaks all inline images.
 - **Sanitize before `cid:` substitution.** Preserves the existing order in `buildBody` and keeps megabytes of base64 data URIs out of the parser — a measurable win on mobile.
 - `npm run typecheck`, `npm run lint`, and `npm run test` must pass before every commit.
 - `package-lock.json`, `test/fixtures/msg-samples/`, and `test/snapshot/__snapshots__/message.test.ts.snap` are gitignored. Never `git add` them.
@@ -24,15 +24,15 @@
 
 ## File Structure
 
-| File | Responsibility |
-| --- | --- |
-| `src/html/sanitize.ts` | **Rewritten.** Email-tuned allowlist, the two `FilterXSS` instances, `sanitizeHtml`, `sanitizeBody`. Old regex helpers deleted. |
-| `src/html/render.ts` | **Modified.** `buildBody` calls `sanitizeBody` or `options.sanitize`. |
-| `src/html/index.ts` | Unchanged — already exports only `sanitizeHtml`, `renderToHtml`, `renderMsgFile`, `PREVIEW_CSS`. |
-| `src/types.ts` | **Modified.** Adds `RenderOptions.sanitize`. |
-| `test/unit/render.test.ts` | **Modified.** Sanitizer XSS/fidelity/remote-blocking/override tests. |
-| `README.md` | **Modified.** Security section, dependency claim, `RenderOptions` list. |
-| `package.json` | **Modified.** Adds the `xss` dependency. |
+| File                       | Responsibility                                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `src/html/sanitize.ts`     | **Rewritten.** Email-tuned allowlist, the two `FilterXSS` instances, `sanitizeHtml`, `sanitizeBody`. Old regex helpers deleted. |
+| `src/html/render.ts`       | **Modified.** `buildBody` calls `sanitizeBody` or `options.sanitize`.                                                           |
+| `src/html/index.ts`        | Unchanged — already exports only `sanitizeHtml`, `renderToHtml`, `renderMsgFile`, `PREVIEW_CSS`.                                |
+| `src/types.ts`             | **Modified.** Adds `RenderOptions.sanitize`.                                                                                    |
+| `test/unit/render.test.ts` | **Modified.** Sanitizer XSS/fidelity/remote-blocking/override tests.                                                            |
+| `README.md`                | **Modified.** Security section, dependency claim, `RenderOptions` list.                                                         |
+| `package.json`             | **Modified.** Adds the `xss` dependency.                                                                                        |
 
 ---
 
@@ -41,11 +41,13 @@
 Adds the dependency and rewrites `sanitizeHtml`. The old `blockRemoteImages` regex helper is left in place so `render.ts` keeps compiling; Task 2 removes it.
 
 **Files:**
+
 - Modify: `package.json` (dependencies)
 - Modify: `src/html/sanitize.ts` (full rewrite of `sanitizeHtml`; keep `blockRemoteImages` as-is)
 - Test: `test/unit/render.test.ts:33-48` (replace the `sanitizeHtml` describe block)
 
 **Interfaces:**
+
 - Produces: `sanitizeHtml(html: string): string` — unchanged signature, xss-backed.
 - Produces (internal, used by Task 2): `makeSafeAttrValue(blockRemote: boolean): SafeAttrValueHandler`, `buildWhiteList(): IWhiteList`, the `BASE` options object, and the `permissive` filter instance. Task 1 does **not** declare a `blocking` instance — it would be an unused variable until Task 2 adds its consumer, and `npm run lint` fails on unused variables.
 
@@ -89,9 +91,9 @@ describe('sanitizeHtml', () => {
   });
 
   it('neutralizes dangerous CSS in inline style attributes', () => {
-    expect(sanitizeHtml('<div style="background-image:url(javascript:evil())">x</div>')).not.toContain(
-      'javascript:',
-    );
+    expect(
+      sanitizeHtml('<div style="background-image:url(javascript:evil())">x</div>'),
+    ).not.toContain('javascript:');
     expect(sanitizeHtml('<div style="width:expression(alert(1))">x</div>')).not.toContain(
       'expression',
     );
@@ -127,7 +129,9 @@ describe('sanitizeHtml', () => {
 
   it('strips Outlook namespace tags and MSO conditional comments without leaking text', () => {
     expect(sanitizeHtml('<p>a<o:p></o:p>b</p>')).toBe('<p>ab</p>');
-    expect(sanitizeHtml('<!--[if gte mso 9]><xml>junk</xml><![endif]--><p>hi</p>')).toBe('<p>hi</p>');
+    expect(sanitizeHtml('<!--[if gte mso 9]><xml>junk</xml><![endif]--><p>hi</p>')).toBe(
+      '<p>hi</p>',
+    );
     expect(sanitizeHtml('<head><title>Msg</title></head><p>hi</p>')).not.toContain('Msg');
   });
 
@@ -272,11 +276,13 @@ git commit -m "feat: sanitize message HTML with xss instead of hand-written rege
 ## Task 2: Move remote-resource blocking into the sanitizer
 
 **Files:**
+
 - Modify: `src/html/sanitize.ts` (add `sanitizeBody`, delete the `blockRemoteImages` regex helper)
 - Modify: `src/html/render.ts:3` (import) and `src/html/render.ts:53-66` (`buildBody`)
 - Test: `test/unit/render.test.ts` (new describe block)
 
 **Interfaces:**
+
 - Consumes: `makeSafeAttrValue`, `BASE`, `permissive` from Task 1. The `blocking` instance does not exist yet — this task creates it.
 - Produces: `sanitizeBody(html: string, opts: { blockRemoteImages: boolean }): string`, exported from `src/html/sanitize.ts` but **not** re-exported from `src/html/index.ts`.
 
@@ -371,20 +377,20 @@ import { sanitizeBody } from './sanitize.js';
 Then replace the body of `buildBody`'s `msg.bodyHtml` branch (`src/html/render.ts:54-66`) with:
 
 ```ts
-  if (msg.bodyHtml) {
-    let html = sanitizeBody(msg.bodyHtml, {
-      blockRemoteImages: options.blockRemoteImages === true,
-    });
-    if (options.inlineImages !== false) {
-      for (const a of msg.attachments) {
-        if (a.contentId && a.data) {
-          const cid = a.contentId.replace(/^</, '').replace(/>$/, '');
-          html = html.split('cid:' + cid).join(dataUri(a));
-        }
+if (msg.bodyHtml) {
+  let html = sanitizeBody(msg.bodyHtml, {
+    blockRemoteImages: options.blockRemoteImages === true,
+  });
+  if (options.inlineImages !== false) {
+    for (const a of msg.attachments) {
+      if (a.contentId && a.data) {
+        const cid = a.contentId.replace(/^</, '').replace(/>$/, '');
+        html = html.split('cid:' + cid).join(dataUri(a));
       }
     }
-    return '<div class="msgp-body">' + html + '</div>';
   }
+  return '<div class="msgp-body">' + html + '</div>';
+}
 ```
 
 Note the `if (options.blockRemoteImages) html = blockRemote(html);` line is gone — blocking now happens inside the sanitizer, before `cid:` substitution.
@@ -414,11 +420,13 @@ git commit -m "feat: block remote resources inside the sanitizer, not a second p
 ## Task 3: Add the `RenderOptions.sanitize` override
 
 **Files:**
+
 - Modify: `src/types.ts:28-41` (`RenderOptions`)
 - Modify: `src/html/render.ts` (`buildBody`)
 - Test: `test/unit/render.test.ts` (new describe block)
 
 **Interfaces:**
+
 - Consumes: `sanitizeBody` from Task 2.
 - Produces: `RenderOptions.sanitize?: (html: string) => string`.
 
@@ -490,17 +498,17 @@ In `src/types.ts`, add inside `RenderOptions` after the `blockRemoteImages` entr
 In `src/html/render.ts`, change the first statement of the `msg.bodyHtml` branch from:
 
 ```ts
-    let html = sanitizeBody(msg.bodyHtml, {
-      blockRemoteImages: options.blockRemoteImages === true,
-    });
+let html = sanitizeBody(msg.bodyHtml, {
+  blockRemoteImages: options.blockRemoteImages === true,
+});
 ```
 
 to:
 
 ```ts
-    let html = options.sanitize
-      ? options.sanitize(msg.bodyHtml)
-      : sanitizeBody(msg.bodyHtml, { blockRemoteImages: options.blockRemoteImages === true });
+let html = options.sanitize
+  ? options.sanitize(msg.bodyHtml)
+  : sanitizeBody(msg.bodyHtml, { blockRemoteImages: options.blockRemoteImages === true });
 ```
 
 - [ ] **Step 5: Run the tests to verify they pass**
@@ -528,6 +536,7 @@ git commit -m "feat: add RenderOptions.sanitize to override the built-in sanitiz
 ## Task 4: Update the README
 
 **Files:**
+
 - Modify: `README.md:3` (opening line), `README.md` `RenderOptions` list, `README.md` Security section
 
 - [ ] **Step 1: Drop the dependency-free claim**
@@ -610,6 +619,7 @@ suite. This task is a **local review gate that commits no test artifacts**; only
 get committed. Vitest's existing snapshots are the before/after diff.
 
 **Files:**
+
 - Possibly modify: `src/html/sanitize.ts` (allowlist tuning only)
 
 - [ ] **Step 1: Confirm a usable baseline exists**
@@ -659,7 +669,7 @@ For every attribute or tag added in Step 3, add an assertion to the
 `valign` on `<td>` turned out to be dropped:
 
 ```ts
-    expect(out).toContain('valign="top"');
+expect(out).toContain('valign="top"');
 ```
 
 with the corresponding attribute added to the test's input HTML.

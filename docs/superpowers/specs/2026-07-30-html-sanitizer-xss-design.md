@@ -55,7 +55,7 @@ Verified against xss 1.0.15's `lib/default.js` and by prototype:
 
 **`cid:` must be preserved explicitly.** xss's default `safeAttrValue` allowlists `http(s)`,
 `mailto:`, `tel:`, `data:image/`, `ftp://`, `./`, `../`, `#` and `/` for `href`/`src` — but not
-`cid:`. Since `renderToHtml` substitutes `cid:` references *after* sanitizing, the default would
+`cid:`. Since `renderToHtml` substitutes `cid:` references _after_ sanitizing, the default would
 silently break every inline image. The custom `safeAttrValue` therefore short-circuits `src`
 values starting with `cid:`, passing them through `friendlyAttrValue`/`escapeAttrValue` only.
 `data:image/` is allowed by default, so the generated data URIs survive.
@@ -90,7 +90,7 @@ attribute on any tag**, no `class`, no `id`, no `bgcolor`/`cellpadding`/`cellspa
 ### `<style>` elements
 
 `<style>` stays allowed, preserving today's behavior — many Outlook messages carry their CSS in a
-`<style>` block, and dropping it is a visible fidelity regression. Note that if `style` were *not*
+`<style>` block, and dropping it is a visible fidelity regression. Note that if `style` were _not_
 allowlisted, xss would strip the tag but leak its contents as visible text, so allowlisting it is
 also the safer of the two available shapes.
 
