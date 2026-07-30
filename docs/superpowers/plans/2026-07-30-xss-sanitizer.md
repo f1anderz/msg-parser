@@ -186,7 +186,9 @@ const TABLE_ATTRS = [
 const IMG_ATTRS = ['srcset', 'border', 'hspace', 'vspace'];
 const REMOTE_ATTRS = new Set(['src', 'srcset', 'background', 'poster']);
 const REMOTE_URL = /^\s*(?:https?:)?\/\//i;
-const REMOTE_CSS_URL = /url\(\s*['"]?\s*(?:https?:)?\/\//gi;
+// Must consume the whole URL, not just the scheme prefix — replacing only the prefix
+// leaves the remote host visible in the output.
+const REMOTE_CSS_URL = /url\(\s*['"]?\s*(?:https?:)?\/\/[^'")\s]*/gi;
 const CID_URI = /^cid:/i;
 
 const uniq = (a: string[]): string[] => [...new Set(a)];
