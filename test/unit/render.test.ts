@@ -1,7 +1,16 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { sanitizeHtml, renderToHtml, renderMsgFile } from '../../src/html/index.js';
+import { STYLE_PLACEHOLDER_CORE } from '../../src/html/sanitize.js';
+import { parseMsg } from '../../src/message/index.js';
 import type { MsgMessage } from '../../src/types.js';
 import { buildCfb } from '../helpers/build-cfb.js';
+
+const styleFixturePath = join(
+  process.cwd(),
+  'test/fixtures/msg-samples/00f90e4689c893f85eaed105cbcdeb26215ba5e7.msg',
+);
 
 const utf16 = (s: string): Uint8Array => {
   const b = new Uint8Array(s.length * 2);
@@ -44,6 +53,219 @@ describe('sanitizeHtml', () => {
     const out = sanitizeHtml(html);
     expect(out).toContain('href="http://example.com/onclick=1"');
     expect(out).toContain('<p>after</p>');
+  });
+
+  it('drops tags outside the allowlist entirely', () => {
+    expect(sanitizeHtml('<iframe src="http://e.com"></iframe>')).toBe('');
+    expect(sanitizeHtml('<form action="http://e.com"><input name="p"></form>')).toBe('');
+    expect(sanitizeHtml('<svg><animate onbegin="alert(1)" attributeName="x"></svg>')).toBe('');
+  });
+
+  it('removes script bodies rather than leaking them as text', () => {
+    expect(sanitizeHtml('<script>alert(1)</script><p>ok</p>')).toBe('<p>ok</p>');
+  });
+
+  it('neutralizes dangerous CSS in inline style attributes', () => {
+    const out1 = sanitizeHtml('<div style="background-image:url(javascript:evil())">x</div>');
+    expect(out1).not.toContain('javascript:');
+    expect(out1).toContain('>x<');
+
+    const out2 = sanitizeHtml('<div style="width:expression(alert(1))">x</div>');
+    expect(out2).not.toContain('expression');
+    expect(out2).toContain('>x<');
+  });
+
+  it('escapes the noscript title mXSS payload instead of reviving it', () => {
+    const out = sanitizeHtml('<noscript><p title="</noscript><img src=x onerror=alert(1)>">');
+    // The payload survives as escaped *text* inside the title value — that is the
+    // correct outcome. What matters is that it is never revived as markup, so assert
+    // on the escaping rather than on the absence of the substring.
+    expect(out).not.toContain('<img');
+    expect(out).toContain('&lt;img');
+  });
+
+  it('preserves the table markup and inline styles real email depends on', () => {
+    const html =
+      '<table cellpadding="0" cellspacing="0" width="600"><tr>' +
+      '<td bgcolor="#f4f4f4" style="padding:8px"><p class="b">Hi</p></td></tr></table>';
+    const out = sanitizeHtml(html);
+    expect(out).toContain('cellpadding="0"');
+    expect(out).toContain('cellspacing="0"');
+    expect(out).toContain('width="600"');
+    expect(out).toContain('bgcolor="#f4f4f4"');
+    expect(out).toContain('padding:8px');
+    expect(out).toContain('class="b"');
+  });
+
+  // Found by the 1000-fixture corpus fidelity sweep (task 5): these attributes were
+  // dropped from tags that otherwise survived sanitization, changing visible layout
+  // (hr thickness/length, list numbering/bullet style, br line-wrap, body link color).
+  it('preserves layout attributes the fidelity sweep found were dropped from surviving tags', () => {
+    const html =
+      '<body link="blue" vlink="purple">' +
+      '<hr width="50%" size="3">' +
+      '<ol start="5" type="a"><li>x</li></ol>' +
+      '<ul type="square"><li>y</li></ul>' +
+      '<br clear="all">' +
+      '</body>';
+    const out = sanitizeHtml(html);
+    expect(out).toContain('link="blue"');
+    expect(out).toContain('vlink="purple"');
+    expect(out).toContain('width="50%"');
+    expect(out).toContain('size="3"');
+    expect(out).toContain('start="5"');
+    expect(out).toContain('type="a"');
+    expect(out).toContain('type="square"');
+    expect(out).toContain('clear="all"');
+  });
+
+  it('keeps <style> blocks, which Outlook uses for message CSS', () => {
+    expect(sanitizeHtml('<style>.b{font-weight:bold}</style><p class="b">x</p>')).toContain(
+      '<style>.b{font-weight:bold}</style>',
+    );
+  });
+
+  describe('<style> block handling', () => {
+    it('preserves the contents of a comment-wrapped stylesheet (Outlook canonical export)', () => {
+      const out = sanitizeHtml(
+        '<style><!-- p.MsoNormal{margin:0in} --></style><p class="MsoNormal">x</p>',
+      );
+      expect(out).toContain('p.MsoNormal{margin:0in}');
+      expect(out).toContain('class="MsoNormal"');
+    });
+
+    it('does not escape > in a child-combinator selector', () => {
+      const out = sanitizeHtml('<style>td > p{color:red}</style>');
+      expect(out).toContain('td > p');
+      expect(out).not.toContain('td &gt; p');
+    });
+
+    it('emits balanced <style>/</style> even when the input tries to desync via a comment', () => {
+      const out = sanitizeHtml('<style>a{}<!--</style>--><p>rest</p>');
+      const opens = out.match(/<style/gi) ?? [];
+      const closes = out.match(/<\/style/gi) ?? [];
+      expect(opens.length).toBe(closes.length);
+      expect(out).toContain('rest');
+    });
+
+    it('does not let a desynced <style> suppress the attachment list', () => {
+      // `render.ts` appends the attachment block after the sanitized body
+      // unconditionally, so `important.pdf` would appear in `out` even if the
+      // sanitizer were still broken — a substring check on it alone cannot detect a
+      // regression. The property that actually distinguishes fixed from broken is
+      // that the sanitizer never emits an unbalanced <style>: an unclosed <style> is
+      // exactly what makes a *browser* swallow everything after it, including the
+      // real attachment list markup.
+      const out = renderToHtml(
+        msg({
+          bodyHtml: '<style>a{}<!--</style>--><p>rest</p>',
+          attachments: [
+            {
+              name: 'important.pdf',
+              mime: 'application/pdf',
+              contentId: null,
+              hidden: false,
+              data: new Uint8Array(10),
+            },
+          ],
+        }),
+      );
+      const opens = out.match(/<style/gi) ?? [];
+      const closes = out.match(/<\/style/gi) ?? [];
+      expect(opens.length).toBe(closes.length);
+      expect(out).toContain('important.pdf');
+    });
+
+    it('drops a <style> block whose captured contents contain a literal </style rather than reinserting it', () => {
+      // The first `</style ... >` that is syntactically a real closing tag terminates the
+      // capture; a fake one earlier (invalid tag name, so not matched as the closer)
+      // leaves the literal "</style" substring inside the captured contents, which must
+      // be dropped rather than spliced back in.
+      const out = sanitizeHtml('<style>a{}</stylefoo>b{}</style><p>after</p>');
+      expect(out).not.toContain('<style');
+      expect(out).not.toContain('stylefoo');
+      expect(out).toContain('<p>after</p>');
+    });
+
+    it('preserves a safe media attribute but never carries over other attributes', () => {
+      const withMedia = sanitizeHtml('<style media="print">.a{color:red}</style>');
+      expect(withMedia).toContain('<style media="print">');
+      expect(withMedia).toContain('.a{color:red}');
+
+      const withOnload = sanitizeHtml('<style onload="evil()">.a{color:red}</style>');
+      expect(withOnload).not.toContain('onload');
+      expect(withOnload).not.toContain('evil()');
+      expect(withOnload).toContain('.a{color:red}');
+    });
+
+    it('drops an unterminated <style> instead of leaking a [removed] marker and raw CSS', () => {
+      const out = sanitizeHtml('<style>.a{color:red}<p>after</p>');
+      expect(out).not.toContain('[removed]');
+      expect(out).not.toContain('.a{color:red}');
+    });
+
+    it('does not let the unterminated-<style> rule touch a well-formed block followed by content', () => {
+      const out = sanitizeHtml('<style>.a{color:red}</style><p>after</p>');
+      expect(out).toContain('.a{color:red}');
+      expect(out).toContain('<p>after</p>');
+    });
+
+    // SECURITY: guards the invariant that the `\x01` sentinels wrapping the style
+    // placeholder are non-printable so a placeholder landing inside an attribute value
+    // is mangled by xss's non-printable-character stripping and can never be restored
+    // into markup. Without that (or the residual-placeholder scrub in `restore`), this
+    // exact input reopens an attribute-value breakout with a working `onerror`.
+    it('SECURITY: a <style> stashed inside a title attribute value cannot break out of it', () => {
+      const out = sanitizeHtml(
+        '<div title="<style media=print>x{}<img src=y onerror=alert(1)></style>">t</div>',
+      );
+      expect(out).not.toContain('onerror');
+      expect(out).not.toContain('<img');
+      // A successful breakout would close the `title="..."` early with an unescaped
+      // `"` and open a second, attacker-controlled attribute list.
+      expect(out).not.toMatch(/title="[^"]*"[^>]*onerror/i);
+    });
+
+    it('does not leak the style placeholder token when it lands in an attribute value', () => {
+      const out = sanitizeHtml('<img alt="<style>a{}</style>">');
+      expect(out).not.toContain(STYLE_PLACEHOLDER_CORE);
+    });
+
+    it('does not mistake data-media for the media attribute', () => {
+      const out = sanitizeHtml('<style data-media="print">a{}</style>');
+      expect(out).not.toContain('media="print"');
+      expect(out).toContain('a{}');
+    });
+
+    it('captures attributes past a > inside a quoted attribute value without corrupting contents', () => {
+      const out = sanitizeHtml('<style media="a>b">x{}</style>');
+      const match = /<style[^>]*>([\s\S]*?)<\/style>/i.exec(out);
+      expect(match?.[1]).toBe('x{}');
+    });
+
+    // The fixture corpus is gitignored and absent in CI, so this suite is skipped
+    // rather than failing when it isn't present locally.
+    describe.skipIf(!existsSync(styleFixturePath))('unterminated <style> in a real fixture', () => {
+      it('renders 00f90e4689c893f85eaed105cbcdeb26215ba5e7.msg without a literal [removed] marker', () => {
+        const bytes = new Uint8Array(readFileSync(styleFixturePath));
+        const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        const parsed = parseMsg(ab as ArrayBuffer);
+        const out = sanitizeHtml(parsed.bodyHtml ?? '');
+        expect(out).not.toContain('[removed]');
+      });
+    });
+  });
+
+  it('strips Outlook namespace tags and MSO conditional comments without leaking text', () => {
+    expect(sanitizeHtml('<p>a<o:p></o:p>b</p>')).toBe('<p>ab</p>');
+    expect(sanitizeHtml('<!--[if gte mso 9]><xml>junk</xml><![endif]--><p>hi</p>')).toBe(
+      '<p>hi</p>',
+    );
+    expect(sanitizeHtml('<head><title>Msg</title></head><p>hi</p>')).not.toContain('Msg');
+  });
+
+  it('preserves cid: image references for later inlining', () => {
+    expect(sanitizeHtml('<img src="cid:img1">')).toContain('cid:img1');
   });
 });
 
@@ -133,5 +355,99 @@ describe('renderMsgFile', () => {
     const blob = new Blob([msgBytes()]);
     const html = await renderMsgFile(blob);
     expect(html).toContain('From file');
+  });
+});
+
+describe('blockRemoteImages', () => {
+  const remote = {
+    'img src': '<img src="http://e.com/t.gif">',
+    'protocol-relative src': '<img src="//e.com/t.gif">',
+    srcset: '<img srcset="https://e.com/a.png 1x">',
+    'srcset with a later remote candidate': '<img srcset="./a.png 1x, https://e.com/b.png 2x">',
+    background: '<td background="https://e.com/b.png">x</td>',
+    'css background-image': '<div style="background-image:url(https://e.com/x.png)">x</div>',
+    'css background-image, double-quoted url()':
+      '<div style="background-image:url(&quot;//e.com/x.png&quot;)">x</div>',
+  };
+
+  for (const [label, html] of Object.entries(remote)) {
+    it(`neutralizes remote ${label}`, () => {
+      const out = renderToHtml(msg({ bodyHtml: html }), { blockRemoteImages: true });
+      expect(out).not.toContain('e.com/');
+      expect(out).toContain('blocked:');
+    });
+  }
+
+  it('blocks a srcset whose first candidate is relative but a later one is remote', () => {
+    const out = renderToHtml(msg({ bodyHtml: remote['srcset with a later remote candidate'] }), {
+      blockRemoteImages: true,
+    });
+    expect(out).not.toContain('e.com/');
+  });
+
+  it('blocks every url() form (bare, single-quoted, double-quoted) in one declaration', () => {
+    const html =
+      '<div style="background:url(//e.com/a.png), url(\'//e.com/b.png\'), url(&quot;//e.com/c.png&quot;)">x</div>';
+    const out = renderToHtml(msg({ bodyHtml: html }), { blockRemoteImages: true });
+    expect(out).not.toContain('e.com/');
+  });
+
+  it('leaves remote sources alone when the option is off', () => {
+    const out = renderToHtml(msg({ bodyHtml: remote['img src'] }));
+    expect(out).toContain('http://e.com/t.gif');
+  });
+
+  it('keeps data: and cid: URIs when blocking remote images', () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const out = renderToHtml(
+      msg({
+        bodyHtml: '<img src="cid:img1">',
+        attachments: [
+          { name: 'i.png', mime: 'image/png', contentId: 'img1', hidden: true, data: png },
+        ],
+      }),
+      { blockRemoteImages: true },
+    );
+    expect(out).toContain('data:image/png;base64,');
+    expect(out).not.toContain('blocked:');
+  });
+});
+
+describe('options.sanitize', () => {
+  it('replaces the built-in sanitizer and uses its output verbatim', () => {
+    const out = renderToHtml(msg({ bodyHtml: '<p>Body</p>' }), {
+      sanitize: () => '<em>replaced</em>',
+    });
+    expect(out).toContain('<em>replaced</em>');
+    expect(out).not.toContain('<p>Body</p>');
+  });
+
+  it('receives the raw body HTML before cid: substitution', () => {
+    const seen: string[] = [];
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    renderToHtml(
+      msg({
+        bodyHtml: '<img src="cid:img1">',
+        attachments: [
+          { name: 'i.png', mime: 'image/png', contentId: 'img1', hidden: true, data: png },
+        ],
+      }),
+      {
+        sanitize: (html) => {
+          seen.push(html);
+          return html;
+        },
+      },
+    );
+    expect(seen).toEqual(['<img src="cid:img1">']);
+  });
+
+  it('takes over remote-image blocking too', () => {
+    const out = renderToHtml(msg({ bodyHtml: '<img src="http://e.com/t.gif">' }), {
+      blockRemoteImages: true,
+      sanitize: (html) => html,
+    });
+    expect(out).toContain('http://e.com/t.gif');
+    expect(out).not.toContain('blocked:');
   });
 });

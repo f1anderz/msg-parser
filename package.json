@@ -1,7 +1,7 @@
 {
   "name": "@f1anderz/msg-parser",
   "version": "0.1.2",
-  "description": "Dependency-free TypeScript library to parse and preview Outlook .msg files.",
+  "description": "TypeScript library to parse and preview Outlook .msg files. No DOM required.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -52,5 +52,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "xss": "^1.0.15"
   }
 }
