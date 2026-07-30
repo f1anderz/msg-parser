@@ -77,9 +77,37 @@ const CID_URI = /^cid:/i;
  * disclosed, deliberate limitation — see README) but are no longer corrupted or capable
  * of desynchronizing the parser.
  */
-const STYLE_BLOCK_RE = /<style\b([^>]*)>([\s\S]*?)<\/style\s*>/gi;
-const MEDIA_ATTR_RE = /\bmedia\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+// The attribute capture is quote-aware so a `>` inside a quoted attribute value (e.g.
+// `<style media="a>b">`) does not truncate the match early and spill into the CSS
+// contents.
+const STYLE_BLOCK_RE = /<style\b((?:"[^"]*"|'[^']*'|[^>])*)>([\s\S]*?)<\/style\s*>/gi;
+// Anchored to a preceding whitespace-or-start boundary (not `\b`) so `data-media="..."`
+// is not mistaken for the `media` attribute — `\b` matches between `-` and `m` too.
+const MEDIA_ATTR_RE = /(?:^|\s)media\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
 const SAFE_MEDIA_VALUE = /^[a-zA-Z0-9 ,()\-:]+$/;
+// A single non-printable (< 0x20) sentinel byte. It is invisible in source and in
+// diffs, which is exactly why it must stay a named constant: xss's `friendlyAttrValue`
+// (used whenever a value is rendered back into an attribute) runs every attribute
+// value through `clearNonPrintableCharacter`, which maps every character below 0x20 to
+// a space. That means a placeholder token built from `SOH` can *never* survive intact
+// if it lands inside an attribute value — it comes back as mangled, harmless text
+// instead of a token `restore()` could mistake for a real placeholder and splice
+// unescaped markup through. This is the only thing that makes it safe for `restore` to
+// treat a placeholder match found inside an attribute value the same as one found in
+// element content. If this sentinel is ever changed to a printable character, a
+// placeholder inside an attribute value (e.g. `<div title="<style>...">`) would survive
+// `friendlyAttrValue` verbatim and `restore` would splice raw, attacker-influenced
+// `<style>` markup — including a literal `"` — back into the attribute value,
+// reopening an attribute-value breakout. See the "residual placeholder" stripping in
+// `restore` below for a second, non-coincidence-dependent layer against the same risk.
+const SOH = '\x01';
+// The printable "core" of the placeholder, used both to build the sentinel-wrapped
+// token above and, bare, to recognize a *mangled* remnant of that token (sentinels
+// stripped to spaces by `clearNonPrintableCharacter`) so it can be scrubbed even though
+// it can never be restored.
+// Exported so tests can assert against it without hardcoding a duplicate string
+// literal that would silently drift out of sync with the real prefix.
+export const STYLE_PLACEHOLDER_CORE = 'XSSSTYLEPLACEHOLDER';
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -91,11 +119,11 @@ function escapeRegExp(value: string): string {
  * deterministically extend it (never `Math.random()`) until it provably does not.
  */
 function pickStylePlaceholderPrefix(html: string): string {
-  let prefix = 'XSSSTYLEPLACEHOLDER';
+  let prefix = `${SOH}${STYLE_PLACEHOLDER_CORE}${SOH}`;
   let salt = 0;
   while (html.includes(prefix)) {
     salt += 1;
-    prefix = `XSSSTYLEPLACEHOLDER${salt}`;
+    prefix = `${SOH}${STYLE_PLACEHOLDER_CORE}${salt}${SOH}`;
   }
   return prefix;
 }
@@ -111,30 +139,54 @@ function stashStyleBlocks(html: string): { html: string; restore: (out: string) 
   const prefix = pickStylePlaceholderPrefix(html);
   const blocks: (StashedStyle | null)[] = [];
 
-  const replaced = html.replace(STYLE_BLOCK_RE, (_match, attrs: string, contents: string) => {
-    const mediaMatch = MEDIA_ATTR_RE.exec(attrs);
-    let media: string | null = null;
-    if (mediaMatch) {
-      const raw = mediaMatch[2] ?? mediaMatch[3] ?? mediaMatch[4] ?? '';
-      if (SAFE_MEDIA_VALUE.test(raw)) media = raw;
-    }
-    const idx = blocks.length;
-    // Reinserted content must never be able to close its own element or open a new
-    // one: if it contains a literal `</style` or `<script`, drop the whole block
-    // rather than splicing it back in.
-    const unsafe = /<\/style/i.test(contents) || /<script/i.test(contents);
-    blocks.push(unsafe ? null : { media, contents });
-    return `${prefix}${idx}${prefix}`;
-  });
+  const replaced = html
+    .replace(STYLE_BLOCK_RE, (_match, attrs: string, contents: string) => {
+      const mediaMatch = MEDIA_ATTR_RE.exec(attrs);
+      let media: string | null = null;
+      if (mediaMatch) {
+        const raw = mediaMatch[2] ?? mediaMatch[3] ?? mediaMatch[4] ?? '';
+        if (SAFE_MEDIA_VALUE.test(raw)) media = raw;
+      }
+      const idx = blocks.length;
+      // Reinserted content must never be able to close its own element or open a new
+      // one: if it contains a literal `</style` or `<script`, drop the whole block
+      // rather than splicing it back in.
+      const unsafe = /<\/style/i.test(contents) || /<script/i.test(contents);
+      blocks.push(unsafe ? null : { media, contents });
+      return `${prefix}${idx}${prefix}`;
+    })
+    // Everything above only matches a *closed* `<style>...</style>` pair — any block
+    // that had one is already gone, replaced by a placeholder. Anything still matching
+    // `<style\b` here is an unterminated `<style>`, and in real HTML parsing that makes
+    // a browser treat the rest of the document as CSS text, i.e. invisible to the
+    // reader. Drop it and everything after it to match that behavior: left alone, xss's
+    // `stripIgnoreTagBody` fallback (see `BASE.stripIgnoreTagBody` below) only removes a
+    // `[removed]`...`[/removed]` span when it finds a matching closer, so with none it
+    // leaves both the literal `[removed]` marker and the raw CSS as visible body text.
+    .replace(/<style\b[^>]*>[\s\S]*$/i, '');
 
   const placeholderRe = new RegExp(`${escapeRegExp(prefix)}(\\d+)${escapeRegExp(prefix)}`, 'g');
+  // A placeholder that lands inside an attribute value has its `SOH` sentinels mangled
+  // to plain spaces by xss's `friendlyAttrValue` before `restore` ever sees it (see the
+  // `SOH` comment above), so it can never match `placeholderRe` and can never be
+  // resolved back to real content — the mapping is deliberately irreversible once the
+  // sentinels are gone. The only safe outcome for that remnant is to scrub it rather
+  // than show the user a bare `XSSSTYLEPLACEHOLDER 0 XSSSTYLEPLACEHOLDER`-shaped token.
+  const residualPlaceholderRe = new RegExp(
+    `\\s?${escapeRegExp(STYLE_PLACEHOLDER_CORE)}\\d*\\s+\\d+\\s+${escapeRegExp(
+      STYLE_PLACEHOLDER_CORE,
+    )}\\d*\\s?`,
+    'g',
+  );
   const restore = (out: string): string =>
-    out.replace(placeholderRe, (_match, idxStr: string) => {
-      const block = blocks[Number(idxStr)];
-      if (!block) return '';
-      const mediaAttr = block.media ? ` media="${block.media}"` : '';
-      return `<style${mediaAttr}>${block.contents}</style>`;
-    });
+    out
+      .replace(placeholderRe, (_match, idxStr: string) => {
+        const block = blocks[Number(idxStr)];
+        if (!block) return '';
+        const mediaAttr = block.media ? ` media="${block.media}"` : '';
+        return `<style${mediaAttr}>${block.contents}</style>`;
+      })
+      .replace(residualPlaceholderRe, '');
 
   return { html: replaced, restore };
 }
@@ -197,9 +249,13 @@ const BASE: IFilterXSSOptions = {
   // `<v:shape>` vanish instead of becoming visible `&lt;o:p&gt;` text.
   stripIgnoreTag: true,
   // These tags take their contents with them. `style` contents are normally stashed out
-  // of band before `process()` runs (see `stashStyleBlocks`) and never reach xss at all;
-  // this entry is the fallback for a `<style>` that somehow survives unstashed (e.g. no
-  // closing tag), so its contents are dropped rather than leaked as visible text.
+  // of band before `process()` runs (see `stashStyleBlocks`) and never reach xss at all.
+  // This entry is a best-effort fallback if a `<style>` somehow still reaches xss
+  // unstashed: note that xss's `StripTagBody` only splices out its `[removed]`...
+  // `[/removed]` span when it finds a matching closer, so an *unterminated* `<style>`
+  // is NOT handled here — it would leak a literal `[removed]` marker plus the raw CSS
+  // as visible text. `stashStyleBlocks` handles that case itself (see the trailing
+  // `.replace(/<style\b[^>]*>[\s\S]*$/i, '')` there) before this option is ever reached.
   stripIgnoreTagBody: ['script', 'title', 'xml', 'style'],
 };
 

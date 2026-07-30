@@ -1,7 +1,16 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { sanitizeHtml, renderToHtml, renderMsgFile } from '../../src/html/index.js';
+import { STYLE_PLACEHOLDER_CORE } from '../../src/html/sanitize.js';
+import { parseMsg } from '../../src/message/index.js';
 import type { MsgMessage } from '../../src/types.js';
 import { buildCfb } from '../helpers/build-cfb.js';
+
+const styleFixturePath = join(
+  process.cwd(),
+  'test/fixtures/msg-samples/00f90e4689c893f85eaed105cbcdeb26215ba5e7.msg',
+);
 
 const utf16 = (s: string): Uint8Array => {
   const b = new Uint8Array(s.length * 2);
@@ -140,6 +149,13 @@ describe('sanitizeHtml', () => {
     });
 
     it('does not let a desynced <style> suppress the attachment list', () => {
+      // `render.ts` appends the attachment block after the sanitized body
+      // unconditionally, so `important.pdf` would appear in `out` even if the
+      // sanitizer were still broken — a substring check on it alone cannot detect a
+      // regression. The property that actually distinguishes fixed from broken is
+      // that the sanitizer never emits an unbalanced <style>: an unclosed <style> is
+      // exactly what makes a *browser* swallow everything after it, including the
+      // real attachment list markup.
       const out = renderToHtml(
         msg({
           bodyHtml: '<style>a{}<!--</style>--><p>rest</p>',
@@ -154,6 +170,9 @@ describe('sanitizeHtml', () => {
           ],
         }),
       );
+      const opens = out.match(/<style/gi) ?? [];
+      const closes = out.match(/<\/style/gi) ?? [];
+      expect(opens.length).toBe(closes.length);
       expect(out).toContain('important.pdf');
     });
 
@@ -177,6 +196,63 @@ describe('sanitizeHtml', () => {
       expect(withOnload).not.toContain('onload');
       expect(withOnload).not.toContain('evil()');
       expect(withOnload).toContain('.a{color:red}');
+    });
+
+    it('drops an unterminated <style> instead of leaking a [removed] marker and raw CSS', () => {
+      const out = sanitizeHtml('<style>.a{color:red}<p>after</p>');
+      expect(out).not.toContain('[removed]');
+      expect(out).not.toContain('.a{color:red}');
+    });
+
+    it('does not let the unterminated-<style> rule touch a well-formed block followed by content', () => {
+      const out = sanitizeHtml('<style>.a{color:red}</style><p>after</p>');
+      expect(out).toContain('.a{color:red}');
+      expect(out).toContain('<p>after</p>');
+    });
+
+    // SECURITY: guards the invariant that the `\x01` sentinels wrapping the style
+    // placeholder are non-printable so a placeholder landing inside an attribute value
+    // is mangled by xss's non-printable-character stripping and can never be restored
+    // into markup. Without that (or the residual-placeholder scrub in `restore`), this
+    // exact input reopens an attribute-value breakout with a working `onerror`.
+    it('SECURITY: a <style> stashed inside a title attribute value cannot break out of it', () => {
+      const out = sanitizeHtml(
+        '<div title="<style media=print>x{}<img src=y onerror=alert(1)></style>">t</div>',
+      );
+      expect(out).not.toContain('onerror');
+      expect(out).not.toContain('<img');
+      // A successful breakout would close the `title="..."` early with an unescaped
+      // `"` and open a second, attacker-controlled attribute list.
+      expect(out).not.toMatch(/title="[^"]*"[^>]*onerror/i);
+    });
+
+    it('does not leak the style placeholder token when it lands in an attribute value', () => {
+      const out = sanitizeHtml('<img alt="<style>a{}</style>">');
+      expect(out).not.toContain(STYLE_PLACEHOLDER_CORE);
+    });
+
+    it('does not mistake data-media for the media attribute', () => {
+      const out = sanitizeHtml('<style data-media="print">a{}</style>');
+      expect(out).not.toContain('media="print"');
+      expect(out).toContain('a{}');
+    });
+
+    it('captures attributes past a > inside a quoted attribute value without corrupting contents', () => {
+      const out = sanitizeHtml('<style media="a>b">x{}</style>');
+      const match = /<style[^>]*>([\s\S]*?)<\/style>/i.exec(out);
+      expect(match?.[1]).toBe('x{}');
+    });
+
+    // The fixture corpus is gitignored and absent in CI, so this suite is skipped
+    // rather than failing when it isn't present locally.
+    describe.skipIf(!existsSync(styleFixturePath))('unterminated <style> in a real fixture', () => {
+      it('renders 00f90e4689c893f85eaed105cbcdeb26215ba5e7.msg without a literal [removed] marker', () => {
+        const bytes = new Uint8Array(readFileSync(styleFixturePath));
+        const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        const parsed = parseMsg(ab as ArrayBuffer);
+        const out = sanitizeHtml(parsed.bodyHtml ?? '');
+        expect(out).not.toContain('[removed]');
+      });
     });
   });
 
