@@ -1,6 +1,6 @@
 # msg-parser
 
-Dependency-free TypeScript library to parse Outlook `.msg` files to HTML string. Files are parsed locally — nothing is uploaded.
+TypeScript library to parse Outlook `.msg` files to HTML string. Files are parsed locally — nothing is uploaded. Runs in the browser, Node, and React Native — no DOM required.
 
 ## Install
 
@@ -60,7 +60,10 @@ const html = renderToHtml(msg, { locale: 'uk-UA', blockRemoteImages: true });
 | `decompressRtf` | `(bytes: Uint8Array) => Uint8Array \| null`                                                      |
 
 `RenderOptions`: `locale`, `formatDate`, `showHiddenAttachments`, `inlineImages`,
-`blockRemoteImages`, `fragment`.
+`blockRemoteImages`, `fragment`, `sanitize`.
+
+`sanitize?: (html: string) => string` replaces the built-in sanitizer. It receives the raw body
+HTML before `cid:` substitution, and fully overrides sanitization — `blockRemoteImages` included.
 
 `parseMsg` (and therefore `renderToHtml`/`renderMsgFile`) throws `InvalidMsgError` when given a
 buffer that isn't a valid `.msg` (missing OLE Compound File signature) or is otherwise corrupt.
@@ -72,11 +75,20 @@ this by default.
 ## Security
 
 `renderToHtml` output is intended to be rendered inside a **sandboxed iframe without
-`allow-scripts`** — that is the real security boundary. The library additionally strips
-`<script>`, `on*=` handlers, and `javascript:` URLs as defense-in-depth. Set
-`blockRemoteImages: true` to neutralize external `<img>` sources only — it is not a
-comprehensive remote-resource blocker and does not stop CSS `url(...)`, `<link>`, or
-`@import` loads.
+`allow-scripts`** — that is the real security boundary. In React Native, the equivalent is
+`react-native-webview` with `javaScriptEnabled={false}`. If you render this HTML in a WebView
+with JavaScript enabled, the sanitizer becomes your only boundary rather than defense-in-depth.
+
+As defense-in-depth, message HTML is sanitized with [`xss`](https://github.com/leizongmin/js-xss)
+against an allowlist tuned for email: `<script>`, `<iframe>`, `<form>`, `<svg>`, `on*=` handlers,
+`javascript:` URLs, and CSS `expression()`/`url(javascript:)` are removed, while the tables,
+inline styles, `class` attributes and `<style>` blocks real messages depend on are preserved.
+Sanitization needs no DOM, so it behaves identically in the browser, Node, and React Native.
+
+Set `blockRemoteImages: true` to neutralize remote resources: http(s) and protocol-relative URLs
+in `src`, `srcset`, `background`, and `poster` attributes, and in CSS `url(...)` inside inline
+`style` attributes. It does **not** reach stylesheet contents inside `<style>` blocks, nor
+`<link>` or `@import` — pass your own `sanitize` if you need that.
 
 ## Scope
 
