@@ -77,13 +77,63 @@ const CID_URI = /^cid:/i;
  * disclosed, deliberate limitation — see README) but are no longer corrupted or capable
  * of desynchronizing the parser.
  */
-// The attribute capture is quote-aware so a `>` inside a quoted attribute value (e.g.
-// `<style media="a>b">`) does not truncate the match early and spill into the CSS
-// contents.
-const STYLE_BLOCK_RE = /<style\b((?:"[^"]*"|'[^']*'|[^>])*)>([\s\S]*?)<\/style\s*>/gi;
+// Find `<style` starts; the end of the opening tag is located by deterministic scanning
+// so a `>` inside quoted attribute values does not terminate the tag early.
+const STYLE_OPEN_RE = /<style\b/gi;
 // Anchored to a preceding whitespace-or-start boundary (not `\b`) so `data-media="..."`
 // is not mistaken for the `media` attribute — `\b` matches between `-` and `m` too.
 const MEDIA_ATTR_RE = /(?:^|\s)media\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+
+interface StyleBlockMatch {
+  fullStart: number;
+  fullEnd: number;
+  attrs: string;
+  css: string;
+}
+
+function findStyleBlocks(input: string): StyleBlockMatch[] {
+  const out: StyleBlockMatch[] = [];
+  STYLE_OPEN_RE.lastIndex = 0;
+
+  let open: RegExpExecArray | null;
+  while ((open = STYLE_OPEN_RE.exec(input)) !== null) {
+    const tagStart = open.index;
+    let i = STYLE_OPEN_RE.lastIndex;
+    let quote: '"' | "'" | null = null;
+
+    while (i < input.length) {
+      const ch = input[i];
+      if (quote) {
+        if (ch === quote) quote = null;
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+      } else if (ch === '>') {
+        break;
+      }
+      i++;
+    }
+
+    if (i >= input.length || input[i] !== '>') break;
+
+    const attrs = input.slice(open.index + open[0].length, i);
+    const bodyStart = i + 1;
+    const closeRe = /<\/style\s*>/gi;
+    closeRe.lastIndex = bodyStart;
+    const close = closeRe.exec(input);
+    if (!close) break;
+
+    out.push({
+      fullStart: tagStart,
+      fullEnd: close.index + close[0].length,
+      attrs,
+      css: input.slice(bodyStart, close.index),
+    });
+
+    STYLE_OPEN_RE.lastIndex = close.index + close[0].length;
+  }
+
+  return out;
+}
 const SAFE_MEDIA_VALUE = /^[a-zA-Z0-9 ,()\-:]+$/;
 // A single non-printable (< 0x20) sentinel byte. It is invisible in source and in
 // diffs, which is exactly why it must stay a named constant: xss's `friendlyAttrValue`
