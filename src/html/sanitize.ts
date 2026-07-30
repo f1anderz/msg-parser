@@ -189,31 +189,36 @@ function stashStyleBlocks(html: string): { html: string; restore: (out: string) 
   const prefix = pickStylePlaceholderPrefix(html);
   const blocks: (StashedStyle | null)[] = [];
 
-  const replaced = html
-    .replace(STYLE_BLOCK_RE, (_match, attrs: string, contents: string) => {
-      const mediaMatch = MEDIA_ATTR_RE.exec(attrs);
-      let media: string | null = null;
-      if (mediaMatch) {
-        const raw = mediaMatch[2] ?? mediaMatch[3] ?? mediaMatch[4] ?? '';
-        if (SAFE_MEDIA_VALUE.test(raw)) media = raw;
-      }
-      const idx = blocks.length;
-      // Reinserted content must never be able to close its own element or open a new
-      // one: if it contains a literal `</style` or `<script`, drop the whole block
-      // rather than splicing it back in.
-      const unsafe = /<\/style/i.test(contents) || /<script/i.test(contents);
-      blocks.push(unsafe ? null : { media, contents });
-      return `${prefix}${idx}${prefix}`;
-    })
-    // Everything above only matches a *closed* `<style>...</style>` pair — any block
-    // that had one is already gone, replaced by a placeholder. Anything still matching
-    // `<style\b` here is an unterminated `<style>`, and in real HTML parsing that makes
-    // a browser treat the rest of the document as CSS text, i.e. invisible to the
-    // reader. Drop it and everything after it to match that behavior: left alone, xss's
-    // `stripIgnoreTagBody` fallback (see `BASE.stripIgnoreTagBody` below) only removes a
-    // `[removed]`...`[/removed]` span when it finds a matching closer, so with none it
-    // leaves both the literal `[removed]` marker and the raw CSS as visible body text.
-    .replace(/<style\b[^>]*>[\s\S]*$/i, '');
+  let stashed = '';
+  let cursor = 0;
+  for (const block of findStyleBlocks(html)) {
+    stashed += html.slice(cursor, block.fullStart);
+    const mediaMatch = MEDIA_ATTR_RE.exec(block.attrs);
+    let media: string | null = null;
+    if (mediaMatch) {
+      const raw = mediaMatch[2] ?? mediaMatch[3] ?? mediaMatch[4] ?? '';
+      if (SAFE_MEDIA_VALUE.test(raw)) media = raw;
+    }
+    const idx = blocks.length;
+    // Reinserted content must never be able to close its own element or open a new
+    // one: if it contains a literal `</style` or `<script`, drop the whole block
+    // rather than splicing it back in.
+    const unsafe = /<\/style/i.test(block.css) || /<script/i.test(block.css);
+    blocks.push(unsafe ? null : { media, contents: block.css });
+    stashed += `${prefix}${idx}${prefix}`;
+    cursor = block.fullEnd;
+  }
+  stashed += html.slice(cursor);
+
+  // `findStyleBlocks` only matches a *closed* `<style>...</style>` pair — any block
+  // that had one is already gone, replaced by a placeholder. Anything still matching
+  // `<style\b` here is an unterminated `<style>`, and in real HTML parsing that makes
+  // a browser treat the rest of the document as CSS text, i.e. invisible to the
+  // reader. Drop it and everything after it to match that behavior: left alone, xss's
+  // `stripIgnoreTagBody` fallback (see `BASE.stripIgnoreTagBody` below) only removes a
+  // `[removed]`...`[/removed]` span when it finds a matching closer, so with none it
+  // leaves both the literal `[removed]` marker and the raw CSS as visible body text.
+  const replaced = stashed.replace(/<style\b[^>]*>[\s\S]*$/i, '');
 
   const placeholderRe = new RegExp(`${escapeRegExp(prefix)}(\\d+)${escapeRegExp(prefix)}`, 'g');
   // A placeholder that lands inside an attribute value has its `SOH` sentinels mangled
