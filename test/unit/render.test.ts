@@ -45,6 +45,63 @@ describe('sanitizeHtml', () => {
     expect(out).toContain('href="http://example.com/onclick=1"');
     expect(out).toContain('<p>after</p>');
   });
+
+  it('drops tags outside the allowlist entirely', () => {
+    expect(sanitizeHtml('<iframe src="http://e.com"></iframe>')).toBe('');
+    expect(sanitizeHtml('<form action="http://e.com"><input name="p"></form>')).toBe('');
+    expect(sanitizeHtml('<svg><animate onbegin="alert(1)" attributeName="x"></svg>')).toBe('');
+  });
+
+  it('removes script bodies rather than leaking them as text', () => {
+    expect(sanitizeHtml('<script>alert(1)</script><p>ok</p>')).toBe('<p>ok</p>');
+  });
+
+  it('neutralizes dangerous CSS in inline style attributes', () => {
+    expect(sanitizeHtml('<div style="background-image:url(javascript:evil())">x</div>')).not.toContain(
+      'javascript:',
+    );
+    expect(sanitizeHtml('<div style="width:expression(alert(1))">x</div>')).not.toContain(
+      'expression',
+    );
+  });
+
+  it('escapes the noscript title mXSS payload instead of reviving it', () => {
+    const out = sanitizeHtml('<noscript><p title="</noscript><img src=x onerror=alert(1)>">');
+    // The payload survives as escaped *text* inside the title value — that is the
+    // correct outcome. What matters is that it is never revived as markup, so assert
+    // on the escaping rather than on the absence of the substring.
+    expect(out).not.toContain('<img');
+    expect(out).toContain('&lt;img');
+  });
+
+  it('preserves the table markup and inline styles real email depends on', () => {
+    const html =
+      '<table cellpadding="0" cellspacing="0" width="600"><tr>' +
+      '<td bgcolor="#f4f4f4" style="padding:8px"><p class="b">Hi</p></td></tr></table>';
+    const out = sanitizeHtml(html);
+    expect(out).toContain('cellpadding="0"');
+    expect(out).toContain('cellspacing="0"');
+    expect(out).toContain('width="600"');
+    expect(out).toContain('bgcolor="#f4f4f4"');
+    expect(out).toContain('padding:8px');
+    expect(out).toContain('class="b"');
+  });
+
+  it('keeps <style> blocks, which Outlook uses for message CSS', () => {
+    expect(sanitizeHtml('<style>.b{font-weight:bold}</style><p class="b">x</p>')).toContain(
+      '<style>.b{font-weight:bold}</style>',
+    );
+  });
+
+  it('strips Outlook namespace tags and MSO conditional comments without leaking text', () => {
+    expect(sanitizeHtml('<p>a<o:p></o:p>b</p>')).toBe('<p>ab</p>');
+    expect(sanitizeHtml('<!--[if gte mso 9]><xml>junk</xml><![endif]--><p>hi</p>')).toBe('<p>hi</p>');
+    expect(sanitizeHtml('<head><title>Msg</title></head><p>hi</p>')).not.toContain('Msg');
+  });
+
+  it('preserves cid: image references for later inlining', () => {
+    expect(sanitizeHtml('<img src="cid:img1">')).toContain('cid:img1');
+  });
 });
 
 describe('renderToHtml', () => {
