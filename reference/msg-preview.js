@@ -627,11 +627,35 @@
   }
 
   function sanitizeHtml(html) {
-    // Прибираємо скрипти/обробники — додатковий шар до sandbox-iframe
-    return html
-      .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
-      .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-      .replace(/(<\w[^>]*\s(?:href|src)\s*=\s*["']?)\s*javascript:/gi, '$1blocked:');
+    // Прибираємо небезпечні теги/атрибути структурно (без regex-санітизації HTML)
+    var template = document.createElement('template');
+    template.innerHTML = String(html);
+
+    // Видаляємо елементи, що можуть виконувати код або підвантажувати активний контент
+    var blocked = template.content.querySelectorAll(
+      'script, iframe, object, embed, link[rel="import"], meta[http-equiv="refresh"]'
+    );
+    for (var i = 0; i < blocked.length; i++) blocked[i].remove();
+
+    // Видаляємо inline-обробники та блокуємо javascript:-URI
+    var nodes = template.content.querySelectorAll('*');
+    for (var n = 0; n < nodes.length; n++) {
+      var el = nodes[n];
+      for (var a = el.attributes.length - 1; a >= 0; a--) {
+        var attr = el.attributes[a];
+        var name = attr.name;
+        var value = attr.value;
+        if (/^on/i.test(name)) {
+          el.removeAttribute(name);
+          continue;
+        }
+        if (/^(href|src|xlink:href|formaction)$/i.test(name) && /^\s*javascript:/i.test(value)) {
+          el.setAttribute(name, 'blocked:');
+        }
+      }
+    }
+
+    return template.innerHTML;
   }
 
   function render(input, container, options) {
